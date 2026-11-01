@@ -15,6 +15,13 @@ bun run dev          # starts server (:3001) and client (:5173)
 bun run typecheck
 ```
 
+Storybook (grid components, data from the server's `QueryEngine` running in the browser, so no backend is needed):
+
+```sh
+bun run --filter client storybook        # http://localhost:6006
+bun run --filter client build-storybook  # static build in client/storybook-static
+```
+
 Server options (env): `MOCK_ROWS` (default `100000`), `MOCK_LATENCY_MS` (default `150`), `PORT` (default `3001`).
 The client dev server (`client/serve.ts`, `Bun.serve` with HTML imports and HMR) proxies `/api/*` to the server and strips the prefix. `bun run --filter client build` bundles to `client/dist`; `bun run --filter client preview` serves a production bundle with the same proxy.
 

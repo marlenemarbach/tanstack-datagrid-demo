@@ -55,11 +55,13 @@ interface CursorPayload {
   h: string
 }
 
-const encodeCursor = (payload: CursorPayload) => Buffer.from(JSON.stringify(payload)).toString('base64url')
+// btoa/atob instead of Buffer, so the engine also runs in a browser (Storybook). The payload is ASCII.
+const encodeCursor = (payload: CursorPayload) =>
+  btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
 function decodeCursor(cursor: string): CursorPayload {
   try {
-    const payload = JSON.parse(Buffer.from(cursor, 'base64url').toString()) as CursorPayload
+    const payload = JSON.parse(atob(cursor.replace(/-/g, '+').replace(/_/g, '/'))) as CursorPayload
     if (typeof payload.o === 'number' && typeof payload.h === 'string') return payload
   } catch {
     // fall through

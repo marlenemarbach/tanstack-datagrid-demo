@@ -35,6 +35,7 @@ const paths = {
 } as const
 
 export type IconName = keyof typeof paths
+export const iconNames = Object.keys(paths) as Array<IconName>
 
 const PREFIX = 'tg-icon-'
 
@@ -42,7 +43,7 @@ const PREFIX = 'tg-icon-'
 export function IconSprite() {
   return (
     <svg aria-hidden="true" style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}>
-      {(Object.keys(paths) as Array<IconName>).map((name) => (
+      {iconNames.map((name) => (
         <symbol key={name} id={PREFIX + name} viewBox="0 0 24 24">
           <path d={paths[name]} />
         </symbol>
