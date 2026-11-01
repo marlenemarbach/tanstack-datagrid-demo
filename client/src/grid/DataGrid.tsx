@@ -509,6 +509,9 @@ function GridBody(props: DataGridProps<unknown>) {
 
   // -- render -----------------------------------------------------------------
 
+  // Stable, so memoised header and filter cells keep their memo.
+  const openFilter = useCallback((column: GridColumn, anchor: HTMLElement) => setFilterTarget({ column, anchor }), [])
+
   const startHeaders = table.getStartLeafHeaders()
   const centerHeaders = table.getCenterLeafHeaders()
   const renderHeader = (header: Header<Features, Item, unknown>, ci: number) => (
@@ -524,15 +527,14 @@ function GridBody(props: DataGridProps<unknown>) {
       filtered={header.column.getIsFiltered()}
       isLastPinned={header.column.id === startColumns.at(-1)?.id}
       pinnedOffset={pinOffset(header.column)}
-      selection={selection}
+      // Only the select-all checkbox reads it; other headers would re-render on every toggle.
+      selection={header.column.id === 'select' ? selection : undefined}
       dragging={dragColumn === header.column.id}
       dropSide={dropTarget?.id === header.column.id ? dropTarget.side : undefined}
       // With the filter row shown, filtering lives there; the header button is the fallback.
-      onFilter={filterRow ? undefined : (anchor) => setFilterTarget({ column: header.column, anchor })}
+      onFilter={filterRow ? undefined : openFilter}
     />
   )
-
-  const openFilter = useCallback((column: GridColumn, anchor: HTMLElement) => setFilterTarget({ column, anchor }), [])
 
   const renderFilter = (column: GridColumn, isLastPinned: boolean) => (
     <FilterCell
@@ -663,7 +665,8 @@ interface HeaderCellProps {
   ci: number
   dragging: boolean
   dropSide?: 'before' | 'after'
-  onFilter?: (anchor: HTMLElement) => void
+  /** Must be stable so memo holds. */
+  onFilter?: (column: GridColumn, anchor: HTMLElement) => void
   // Derived state passed as props so the memo re-renders when it changes.
   sorted: false | 'asc' | 'desc'
   sortIndex: number
@@ -673,8 +676,8 @@ interface HeaderCellProps {
   filtered: boolean
   isLastPinned: boolean
   pinnedOffset: number | undefined
-  /** Not read directly; the select-all checkbox (header render fn) reads it from table meta. */
-  selection: SelectionState
+  /** Select column only. Not read directly; the select-all checkbox (header render fn) reads it from table meta. */
+  selection: SelectionState | undefined
 }
 
 const HeaderCell = memo(function HeaderCell({ header, ci, dragging, dropSide, onFilter, sorted, sortIndex, multiSort, size, resizing, filtered, isLastPinned, pinnedOffset }: HeaderCellProps) {
@@ -715,7 +718,7 @@ const HeaderCell = memo(function HeaderCell({ header, ci, dragging, dropSide, on
           className="tg-th-filter"
           data-active={filtered ? 'true' : undefined}
           aria-label="Filter"
-          onClick={(e) => onFilter(e.currentTarget.parentElement!)}
+          onClick={(e) => onFilter(column, e.currentTarget.parentElement!)}
         >
           <Icon name="filter" />
         </button>
@@ -795,7 +798,8 @@ const DataRow = memo(function DataRow(p: DataRowProps) {
       width={cell.column.getSize()}
       editMode={p.editMode}
       editing={p.editingColumn === cell.column.id}
-      selected={p.selected}
+      // Only the select cell reads it; other cells would re-render on every toggle.
+      selected={cell.column.id === 'select' && p.selected}
     />
   )
   return (
