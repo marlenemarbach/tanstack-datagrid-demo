@@ -1,0 +1,9 @@
+{
+  "name": "tanstack-table-mui",
+  "private": true,
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "typecheck": "bun run --filter '*' typecheck"
+  }
+}

@@ -1,0 +1,184 @@
+openapi: 3.1.0
+info:
+  title: Orders API (demo)
+  version: 1.0.0
+  description: |
+    Mock backend for the TanStack Table demo, following the Zalando RESTful API guidelines:
+    snake_case properties, UPPER_SNAKE_CASE enums, cursor-based pagination,
+    RFC 9457 problem details, JSON merge patch, and X-Flow-ID propagation.
+  x-api-id: 6f1c1c1e-2d4f-4a8e-9f7b-0c2d7f3b9a10
+  x-audience: company-internal
+  contact: { name: Demo, url: https://opensource.zalando.com/restful-api-guidelines/ }
+servers:
+  - url: http://localhost:3001
+paths:
+  /orders/query:
+    post:
+      summary: Query orders (GET with body semantics)
+      description: |
+        Filters, fuzzy search, sorting and grouping are applied server-side. With `group_by`,
+        the result is a flattened list of group headers and the records of expanded groups.
+        Pass `next` from a response as `cursor` (together with the same query) to get the next page.
+      operationId: queryOrders
+      parameters: [{ $ref: '#/components/parameters/FlowId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderQuery' }
+      responses:
+        '200':
+          description: One page of results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderQueryPage' }
+        default: { $ref: '#/components/responses/Problem' }
+  /orders/{order_id}:
+    patch:
+      summary: Update an order
+      operationId: patchOrder
+      parameters:
+        - { $ref: '#/components/parameters/FlowId' }
+        - { name: order_id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: { $ref: '#/components/schemas/OrderPatch' }
+      responses:
+        '200':
+          description: The updated order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        default: { $ref: '#/components/responses/Problem' }
+  /health:
+    get:
+      summary: Liveness
+      responses:
+        '200': { description: Service is up }
+components:
+  parameters:
+    FlowId:
+      name: X-Flow-ID
+      in: header
+      required: false
+      schema: { type: string }
+  responses:
+    Problem:
+      description: Error
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type: { type: string, format: uri-reference, default: about:blank }
+        title: { type: string }
+        status: { type: integer, format: int32 }
+        detail: { type: string }
+    Filter:
+      oneOf:
+        - type: object
+          required: [field, operator, value]
+          properties:
+            field: { type: string }
+            operator: { type: string, enum: [CONTAINS] }
+            value: { type: string }
+        - type: object
+          required: [field, operator, values]
+          properties:
+            field: { type: string }
+            operator: { type: string, enum: [IN] }
+            values: { type: array, items: { type: string } }
+        - type: object
+          required: [field, operator, value]
+          properties:
+            field: { type: string }
+            operator: { type: string, enum: [EQUALS] }
+            value: { oneOf: [{ type: string }, { type: number }, { type: boolean }] }
+        - type: object
+          required: [field, operator]
+          properties:
+            field: { type: string }
+            operator: { type: string, enum: [BETWEEN] }
+            from: { oneOf: [{ type: string }, { type: number }] }
+            to: { oneOf: [{ type: string }, { type: number }] }
+    OrderQuery:
+      type: object
+      properties:
+        filters: { type: array, items: { $ref: '#/components/schemas/Filter' } }
+        search: { type: string, description: Fuzzy search; every whitespace-separated term must match. }
+        sort:
+          type: array
+          items: { type: string, pattern: '^[+-][a-z0-9_]+$' }
+          example: ['-created_at', '+customer_name']
+        group_by: { type: array, items: { type: string } }
+        expanded_groups:
+          type: array
+          items: { type: string }
+          description: '`group_path` values of expanded groups, e.g. `status:OPEN/priority:HIGH`.'
+        limit: { type: integer, format: int32, minimum: 1, maximum: 5000, default: 100 }
+        cursor: { type: string, description: Opaque cursor from a previous page. }
+    QueryItem:
+      oneOf:
+        - type: object
+          required: [kind, group_path, depth, field, value, count]
+          properties:
+            kind: { type: string, enum: [GROUP] }
+            group_path: { type: string }
+            depth: { type: integer }
+            field: { type: string }
+            value: { oneOf: [{ type: string }, { type: number }, { type: boolean }] }
+            count: { type: integer, description: Matching records in this group. }
+        - type: object
+          required: [kind, group_path, depth, record]
+          properties:
+            kind: { type: string, enum: [RECORD] }
+            group_path: { type: string, description: Path of the containing group, empty when ungrouped. }
+            depth: { type: integer }
+            record: { $ref: '#/components/schemas/Order' }
+    OrderQueryPage:
+      type: object
+      required: [items, self, total_items, total_records]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/QueryItem' } }
+        self: { type: string, description: Cursor of this page. }
+        next: { type: string, description: Cursor of the next page; absent on the last page. }
+        total_items: { type: integer, description: Group headers + records in the flattened result. }
+        total_records: { type: integer, description: Orders matching filters and search. }
+    Order:
+      type: object
+      properties:
+        order_id: { type: string, readOnly: true }
+        customer_name: { type: string }
+        email: { type: string, format: email }
+        company: { type: string }
+        city: { type: string }
+        country: { type: string, description: ISO 3166-1 alpha-2 }
+        region: { type: string, enum: [EMEA, AMER, APAC] }
+        status: { type: string, enum: [OPEN, PROCESSING, SHIPPED, DELIVERED, ON_HOLD, CANCELLED] }
+        priority: { type: string, enum: [LOW, MEDIUM, HIGH, CRITICAL] }
+        channel: { type: string, enum: [WEB, MOBILE, STORE, PHONE, PARTNER] }
+        payment_method: { type: string, enum: [CARD, PAYPAL, INVOICE, BANK_TRANSFER] }
+        category: { type: string }
+        sales_rep: { type: string }
+        warehouse: { type: string }
+        is_paid: { type: boolean }
+        is_express: { type: boolean }
+        is_gift: { type: boolean }
+        created_at: { type: string, format: date-time, readOnly: true }
+        delivery_date: { type: string, format: date }
+        order_value: { type: number, format: decimal }
+        currency: { type: string, format: iso-4217 }
+        quantity: { type: integer }
+        discount_rate: { type: number }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        notes: { type: string }
+      additionalProperties:
+        type: number
+        description: '`kpi_01` … `kpi_40` metric columns.'
+    OrderPatch:
+      description: JSON merge patch (RFC 7396) of writable Order properties.
+      type: object
