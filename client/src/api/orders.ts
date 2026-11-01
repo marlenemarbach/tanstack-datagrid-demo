@@ -87,6 +87,11 @@ export class ProblemError extends Error {
 
 const BASE = '/api'
 
+/** Set by `build:static` (no backend, e.g. GitHub Pages); undefined in dev. */
+declare const __IN_BROWSER_API__: boolean | undefined
+const inBrowser =
+  typeof __IN_BROWSER_API__ !== 'undefined' && __IN_BROWSER_API__ ? import('./inBrowser') : undefined
+
 async function request<T>(path: string, init: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
@@ -102,6 +107,7 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
 }
 
 export function queryOrders(body: QueryRequest, signal?: AbortSignal) {
+  if (inBrowser) return inBrowser.then((api) => api.queryOrders(body, signal))
   return request<QueryResponse<Order>>('/orders/query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -111,6 +117,7 @@ export function queryOrders(body: QueryRequest, signal?: AbortSignal) {
 }
 
 export function patchOrder(orderId: string, patch: Partial<Order>) {
+  if (inBrowser) return inBrowser.then((api) => api.patchOrder(orderId, patch))
   return request<Order>(`/orders/${encodeURIComponent(orderId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/merge-patch+json' },

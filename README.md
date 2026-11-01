@@ -25,6 +25,10 @@ bun run --filter client build-storybook  # static build in client/storybook-stat
 Server options (env): `MOCK_ROWS` (default `100000`), `MOCK_LATENCY_MS` (default `150`), `PORT` (default `3001`).
 The client dev server (`client/serve.ts`, `Bun.serve` with HTML imports and HMR) proxies `/api/*` to the server and strips the prefix. `bun run --filter client build` bundles to `client/dist`; `bun run --filter client preview` serves a production bundle with the same proxy.
 
+### GitHub Pages
+
+Pushes to `main` deploy to GitHub Pages (`.github/workflows/pages.yml`): the app at the site root and Storybook under `/storybook/`. Pages has no backend, so that build (`bun run --filter client build:pages`) runs the server's `QueryEngine` in the browser (`client/src/api/inBrowser.ts`, switched on by `--define __IN_BROWSER_API__=true`). Edits live in memory and are lost on reload. The regular `build` still talks to `/api`.
+
 ## Features
 
 | Feature | Where | Notes |

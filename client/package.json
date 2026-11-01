@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "bun --hot serve.ts",
-    "build": "tsc -b && bun build ./index.html --outdir dist --production --sourcemap=linked",
+    "build": "tsc -b && bun build ./index.html --outdir dist --production --sourcemap=linked --define __IN_BROWSER_API__=false",
+    "build:static": "tsc -b && bun build ./index.html --outdir dist --production --sourcemap=linked --define __IN_BROWSER_API__=true",
+    "build:pages": "rm -rf dist && bun run build:static && storybook build -o dist/storybook --quiet",
     "preview": "NODE_ENV=production bun serve.ts",
     "typecheck": "tsc -b --noEmit",
     "storybook": "storybook dev -p 6006",
