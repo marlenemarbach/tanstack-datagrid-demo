@@ -58,6 +58,10 @@ Measured with Chrome CPU profiles on a production build (300 vertical + 150 hori
 - `DataGrid` is memoised, so toolbar changes don't re-render the grid or the root `sx`.
 - Formatted cell strings are cached per column, because `Intl.format()` was the largest single cost when re-rendering cells on horizontal scroll.
 - Every record and group row has a checkbox in both modes. Space selects a row, except on editable cells in edit mode, where it starts editing.
+- Body cells are memoised (`BodyCell`), so horizontal scrolling only renders cells entering the viewport (~600 → ~14 cell renders per frame).
+- Header cells are memoised and get derived state (sort, size, filter, selection) as props. They never receive `table`: `useTable()` returns a new object on every render, so any component that takes it as a prop can't be memoised.
+- Row overscan is 4. With 10, about 49 rows were mounted for about 22 visible, and the extra layout/paint was the main cost of fast vertical scrolling.
+- At 4× CPU throttling (≈ a regular Windows laptop), these changes cut frames that miss 60 Hz from ~70% to ~20% for horizontal scrolling and from ~56% to ~33% for fast vertical scrolling.
 
 ## API (Zalando RESTful guidelines)
 

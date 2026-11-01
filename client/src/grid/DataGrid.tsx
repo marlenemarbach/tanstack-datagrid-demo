@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import Box from '@mui/material/Box'
 import type { SxProps, Theme } from '@mui/material/styles'
 import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData, type QueryKey } from '@tanstack/react-query'
-import { flexRender, functionalUpdate, useTable, type Column, type ColumnFiltersState, type ColumnOrderState, type ExpandedState, type Header, type OnChangeFn, type Row, type SortingState } from '@tanstack/react-table'
+import { FlexRender, flexRender, functionalUpdate, useTable, type Column, type ColumnFiltersState, type ColumnOrderState, type ExpandedState, type Header, type OnChangeFn, type Row, type SortingState } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Filter, FilterValue, QueryItem, QueryRequest, QueryResponse } from '../api/orders'
 import { Checkbox, GridCell, renderValue } from './cells'
@@ -325,7 +325,7 @@ function GridBody(props: DataGridProps<unknown>) {
     count: rows.length + (hasMore ? 1 : 0),
     getScrollElement: () => scrollRef.current,
     estimateSize: () => rowHeight,
-    overscan: 10,
+    overscan: 4,
     scrollMargin: headerHeight,
     getItemKey: (i) => rows[i]?.id ?? '__loader',
   })
@@ -516,7 +516,15 @@ function GridBody(props: DataGridProps<unknown>) {
       key={header.id}
       header={header}
       ci={ci}
-      table={table}
+      sorted={header.column.getIsSorted()}
+      sortIndex={header.column.getSortIndex()}
+      multiSort={table.state.sorting.length > 1}
+      size={header.getSize()}
+      resizing={header.column.getIsResizing()}
+      filtered={header.column.getIsFiltered()}
+      isLastPinned={header.column.id === startColumns.at(-1)?.id}
+      pinnedOffset={pinOffset(header.column)}
+      selection={selection}
       dragging={dragColumn === header.column.id}
       dropSide={dropTarget?.id === header.column.id ? dropTarget.side : undefined}
       // With the filter row shown, filtering lives there; the header button is the fallback.
@@ -639,28 +647,39 @@ function GridBody(props: DataGridProps<unknown>) {
 
 // ---------------------------------------------------------------------------
 
-type GridTable = ReturnType<typeof useTable<Features, Item>>
+/** Sticky offset of a start-pinned column; passed as a prop so memoised cells update when an earlier pinned column is resized. */
+function pinOffset(column: GridColumn) {
+  return column.getIsPinned() === 'start' ? column.getStart('start') : undefined
+}
 
-function pinnedStyle(column: GridColumn, isLast: boolean) {
-  return column.getIsPinned() === 'start'
-    ? { className: isLast ? ' tg-pinned tg-pinned-last' : ' tg-pinned', style: { insetInlineStart: column.getStart('start') } }
+function pinnedStyle(offset: number | undefined, isLast: boolean) {
+  return offset !== undefined
+    ? { className: isLast ? ' tg-pinned tg-pinned-last' : ' tg-pinned', style: { insetInlineStart: offset } }
     : { className: '', style: undefined }
 }
 
 interface HeaderCellProps {
   header: Header<Features, Item, unknown>
   ci: number
-  table: GridTable
   dragging: boolean
   dropSide?: 'before' | 'after'
   onFilter?: (anchor: HTMLElement) => void
+  // Derived state passed as props so the memo re-renders when it changes.
+  sorted: false | 'asc' | 'desc'
+  sortIndex: number
+  multiSort: boolean
+  size: number
+  resizing: boolean
+  filtered: boolean
+  isLastPinned: boolean
+  pinnedOffset: number | undefined
+  /** Not read directly; the select-all checkbox (header render fn) reads it from table meta. */
+  selection: SelectionState
 }
 
-function HeaderCell({ header, ci, table, dragging, dropSide, onFilter }: HeaderCellProps) {
+const HeaderCell = memo(function HeaderCell({ header, ci, dragging, dropSide, onFilter, sorted, sortIndex, multiSort, size, resizing, filtered, isLastPinned, pinnedOffset }: HeaderCellProps) {
   const column = header.column
-  const sorted = column.getIsSorted()
-  const sortIndex = column.getSortIndex()
-  const pin = pinnedStyle(column, column.id === table.getStartVisibleLeafColumns().at(-1)?.id)
+  const pin = pinnedStyle(pinnedOffset, isLastPinned)
   const resize = header.getResizeHandler()
   // Pinned columns keep their place; everything else can be dragged among the unpinned ones.
   const reorderable = !column.getIsPinned()
@@ -675,26 +694,26 @@ function HeaderCell({ header, ci, table, dragging, dropSide, onFilter }: HeaderC
       data-drop={dropSide}
       draggable={reorderable}
       aria-sort={sorted ? (sorted === 'asc' ? 'ascending' : 'descending') : undefined}
-      style={{ ...pin.style, width: header.getSize() }}
+      style={{ ...pin.style, width: size }}
     >
       {column.getCanSort() ? (
         <button type="button" className="tg-th-label" onClick={column.getToggleSortingHandler()} title="Sort (shift-click to add)">
           <span className="tg-th-text">
-            <table.FlexRender header={header} />
+            <FlexRender header={header} />
           </span>
           {sorted && <Icon name={sorted === 'asc' ? 'arrow-up' : 'arrow-down'} className="tg-sort" />}
-          {sorted && table.state.sorting.length > 1 && <span className="tg-sort-index">{sortIndex + 1}</span>}
+          {sorted && multiSort && <span className="tg-sort-index">{sortIndex + 1}</span>}
         </button>
       ) : (
         <div className="tg-th-label">
-          <table.FlexRender header={header} />
+          <FlexRender header={header} />
         </div>
       )}
       {onFilter && column.getCanFilter() && (
         <button
           type="button"
           className="tg-th-filter"
-          data-active={column.getIsFiltered() ? 'true' : undefined}
+          data-active={filtered ? 'true' : undefined}
           aria-label="Filter"
           onClick={(e) => onFilter(e.currentTarget.parentElement!)}
         >
@@ -704,7 +723,7 @@ function HeaderCell({ header, ci, table, dragging, dropSide, onFilter }: HeaderC
       {column.getCanResize() && (
         <div
           className="tg-resizer"
-          data-resizing={column.getIsResizing() ? 'true' : undefined}
+          data-resizing={resizing ? 'true' : undefined}
           // preventDefault keeps the mousedown from starting a column drag.
           onMouseDown={(e) => {
             e.preventDefault()
@@ -716,7 +735,7 @@ function HeaderCell({ header, ci, table, dragging, dropSide, onFilter }: HeaderC
       )}
     </div>
   )
-}
+})
 
 interface DataRowProps {
   row: GridRow
@@ -737,32 +756,48 @@ interface DataRowProps {
   columns: unknown
 }
 
+type GridCellObj = ReturnType<GridRow['getAllCells']>[number]
+
+/** Memoised: horizontal scrolling only renders cells entering the viewport. */
+const BodyCell = memo(function BodyCell(p: { cell: GridCellObj; ci: number; isLastPinned: boolean; pinnedOffset: number | undefined; width: number; editMode: boolean; editing: boolean; selected: boolean }) {
+  const column = p.cell.column
+  const meta = column.columnDef.meta
+  const pin = pinnedStyle(p.pinnedOffset, p.isLastPinned)
+  return (
+    <div
+      className={`tg-cell${pin.className}`}
+      role="gridcell"
+      tabIndex={-1}
+      data-ci={p.ci}
+      data-type={meta?.type}
+      data-align={meta?.align ?? (meta?.type === 'number' ? 'end' : undefined)}
+      data-editable={p.editMode && meta?.editable ? 'true' : undefined}
+      data-editing={p.editing ? 'true' : undefined}
+      style={{ ...pin.style, width: p.width }}
+    >
+      {/* flexRender, not <FlexRender>: the latter blanks cells of grouped columns (placeholders). */}
+      {flexRender(column.columnDef.cell, p.cell.getContext())}
+    </div>
+  )
+})
+
 /** Memoised: vertical scrolling only renders rows entering the viewport. */
 const DataRow = memo(function DataRow(p: DataRowProps) {
   const startCells = p.row.getStartVisibleCells()
   const centerCells = p.row.getCenterVisibleCells()
-  const renderCell = (cell: (typeof startCells)[number], ci: number, isLastPinned: boolean) => {
-    const column = cell.column
-    const meta = column.columnDef.meta
-    const pin = pinnedStyle(column, isLastPinned)
-    return (
-      <div
-        key={cell.id}
-        className={`tg-cell${pin.className}`}
-        role="gridcell"
-        tabIndex={-1}
-        data-ci={ci}
-        data-type={meta?.type}
-        data-align={meta?.align ?? (meta?.type === 'number' ? 'end' : undefined)}
-        data-editable={p.editMode && meta?.editable ? 'true' : undefined}
-        data-editing={p.editingColumn === column.id ? 'true' : undefined}
-        style={{ ...pin.style, width: column.getSize() }}
-      >
-        {/* flexRender, not <FlexRender>: the latter blanks cells of grouped columns (placeholders). */}
-        {flexRender(column.columnDef.cell, cell.getContext())}
-      </div>
-    )
-  }
+  const renderCell = (cell: (typeof startCells)[number], ci: number, isLastPinned: boolean) => (
+    <BodyCell
+      key={cell.id}
+      cell={cell}
+      ci={ci}
+      isLastPinned={isLastPinned}
+      pinnedOffset={pinOffset(cell.column)}
+      width={cell.column.getSize()}
+      editMode={p.editMode}
+      editing={p.editingColumn === cell.column.id}
+      selected={p.selected}
+    />
+  )
   return (
     <div
       className="tg-row"
