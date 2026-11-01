@@ -22,14 +22,13 @@ The client dev server (`client/serve.ts`, `Bun.serve` with HTML imports and HMR)
 
 | Feature | Where | Notes |
 | --- | --- | --- |
-| Server state | `grid/DataGrid.tsx` | `useInfiniteQuery`; sorting, filters, search, grouping and expanded groups are part of the query key. `keepPreviousData` avoids flashes. |
+| Server state | `grid/DataGrid.tsx` | `useInfiniteQuery`; sorting, filters, grouping and expanded groups are part of the query key. `keepPreviousData` avoids flashes. |
 | Infinite scroll | `DataGrid.tsx` | Cursor pages of 200; the next page loads when the last 20 rows come into view. |
 | Row virtualization | `DataGrid.tsx` | `@tanstack/react-virtual`, fixed 36px rows, rows are `memo`ised so vertical scrolling only renders new rows. |
 | Column virtualization | `DataGrid.tsx` | Horizontal virtualizer over the unpinned columns; pinned columns are sticky. 66 columns, ~14–20 rendered. |
 | Sorting | header click, shift-click for multi-sort | Sent as Zalando `sort: ["-order_value", "+customer_name"]`. |
 | Filtering | filter icon in each header → MUI `Popover` over the header cell | Text (contains), number/date range, boolean, multi-select for enum/status/icon columns. The TanStack filter value *is* the API filter shape. |
 | Per-column search | filter row under the header | One field per column, synced with the popover. Text: contains. Number/date: `42`, `>10`, `<10`, `10..20`, `2025`, `2025-03`, all bounds inclusive; invalid input is marked and not sent. Enum/status/icon/boolean: native `<select>`. Disable with `filterRow={false}`. |
-| Fuzzy search | toolbar | Server side, `@tanstack/match-sorter-utils`; every term must match some field, results are ranked. |
 | Grouping | toolbar (multi-level) | Server side. The API returns a flattened list of group headers and records of expanded groups, so grouping works with infinite scroll and virtualization. |
 | Row + group checkboxes | `grid/selection.ts` | Selection is stored as scope decisions (`all`, group path, record), so selecting a collapsed group with 3,000 unloaded records is exact and can be sent to a bulk endpoint. Group checkboxes show indeterminate state, and the count is exact. |
 | Edit mode | toolbar switch | Editable cells are styled like inputs; a real `<input>`/`<select>` only mounts for the cell being edited, on the first keystroke (seeded with it), Enter/F2 or double-click. Enter commits, Esc cancels. Booleans toggle on click/Space. Optimistic update + rollback via `PATCH` (merge patch). |
@@ -49,7 +48,7 @@ MUI is used where it adds value (toolbar inputs, Autocomplete, Switch, Popover a
 Measured with Chrome CPU profiles on a production build (300 vertical + 150 horizontal scroll frames, 40 keystrokes):
 
 - No MUI component renders while scrolling. The progress bar is a native element (an idle MUI `LinearProgress` kept animating while hidden), and the filter `Popover` is only mounted while open.
-- `DataGrid` is memoised and `SearchField` owns its draft state, so keystrokes don't re-render the toolbar, the grid, or the root `sx`. Typing cost went 33 ms → 7 ms.
+- `DataGrid` is memoised, so toolbar changes don't re-render the grid or the root `sx`.
 - Formatted cell strings are cached per column, because `Intl.format()` was the largest single cost when re-rendering cells on horizontal scroll.
 - Every record and group row has a checkbox in both modes. Space selects a row, except on editable cells in edit mode, where it starts editing.
 
@@ -57,7 +56,7 @@ Measured with Chrome CPU profiles on a production build (300 vertical + 150 hori
 
 See `server/openapi.yaml`.
 
-- `POST /orders/query`: query with a body (`filters`, `search`, `sort`, `group_by`, `expanded_groups`, `limit`, `cursor`)
+- `POST /orders/query`: query with a body (`filters`, `sort`, `group_by`, `expanded_groups`, `limit`, `cursor`)
 - `PATCH /orders/{order_id}`: `application/merge-patch+json`
 - `GET /health`
 

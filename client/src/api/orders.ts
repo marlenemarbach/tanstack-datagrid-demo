@@ -48,7 +48,6 @@ export type FilterValue = Filter extends infer F ? (F extends Filter ? Omit<F, '
 
 export interface QueryRequest {
   filters?: Array<Filter>
-  search?: string
   sort?: Array<string>
   group_by?: Array<string>
   expanded_groups?: Array<string>

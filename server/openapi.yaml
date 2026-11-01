@@ -16,7 +16,7 @@ paths:
     post:
       summary: Query orders (GET with body semantics)
       description: |
-        Filters, fuzzy search, sorting and grouping are applied server-side. With `group_by`,
+        Filters, sorting and grouping are applied server-side. With `group_by`,
         the result is a flattened list of group headers and the records of expanded groups.
         Pass `next` from a response as `cursor` (together with the same query) to get the next page.
       operationId: queryOrders
@@ -109,7 +109,6 @@ components:
       type: object
       properties:
         filters: { type: array, items: { $ref: '#/components/schemas/Filter' } }
-        search: { type: string, description: Fuzzy search; every whitespace-separated term must match. }
         sort:
           type: array
           items: { type: string, pattern: '^[+-][a-z0-9_]+$' }
@@ -147,7 +146,7 @@ components:
         self: { type: string, description: Cursor of this page. }
         next: { type: string, description: Cursor of the next page; absent on the last page. }
         total_items: { type: integer, description: Group headers + records in the flattened result. }
-        total_records: { type: integer, description: Orders matching filters and search. }
+        total_records: { type: integer, description: Orders matching the filters. }
     Order:
       type: object
       properties:

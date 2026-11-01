@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import Button from "@mui/material/Button";
-import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Popover from "@mui/material/Popover";
 import Stack from "@mui/material/Stack";
@@ -10,6 +9,8 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
 import type { Column } from "@tanstack/react-table";
 import type { FilterValue, QueryItem } from "../api/orders";
+import { Checkbox } from "./cells";
+import { isoToLocal, localToIso } from "./filterDates";
 import type { Features } from "./features";
 
 type AnyColumn = Column<Features, QueryItem<unknown>, unknown>;
@@ -20,7 +21,8 @@ export interface FilterTarget {
 }
 
 /**
- * One popover instance for the whole grid, positioned over the header cell.
+ * One popover instance for the whole grid, anchored to the header cell (filter
+ * row hidden) or to a filter-row field (multi-select, number/date range).
  * The edited value is TanStack column-filter state; it already has the shape
  * of an API filter (minus `field`).
  */
@@ -98,11 +100,12 @@ function FilterForm({ column }: { column: AnyColumn }) {
             <FormControlLabel
               key={o.value}
               label={o.label}
+              sx={{ m: 0, gap: 1, py: 0.75 }}
               control={
                 <Checkbox
-                  size="small"
+                  label={o.label}
                   checked={selected.includes(o.value)}
-                  onChange={(e) => toggle(o.value, e.target.checked)}
+                  onToggle={(on) => toggle(o.value, on)}
                 />
               }
             />
@@ -117,7 +120,7 @@ function FilterForm({ column }: { column: AnyColumn }) {
       const between = value?.operator === "BETWEEN" ? value : undefined;
       body = (
         <RangeFilter
-          type={meta.type === "number" ? "number" : "date"}
+          type={meta.type}
           from={between?.from}
           to={between?.to}
           onChange={set}
@@ -185,33 +188,41 @@ function TextFilter({
 }
 
 function RangeFilter(props: {
-  type: "number" | "date";
+  type: "number" | "date" | "datetime";
   from?: string | number;
   to?: string | number;
   onChange: (v: FilterValue | undefined) => void;
 }) {
-  const [draft, setDraft] = useState({
-    from: props.from?.toString() ?? "",
-    to: props.to?.toString() ?? "",
-  });
+  // Datetime fields edit local minutes; a date-only bound widens to its whole day.
+  const show = (v: string | number | undefined, edge: "start" | "end") => {
+    if (v === undefined) return "";
+    if (props.type !== "datetime" || typeof v !== "string") return v.toString();
+    return v.includes("T") ? isoToLocal(v) : `${v}T${edge === "start" ? "00:00" : "23:59"}`;
+  };
+  const initial = { from: show(props.from, "start"), to: show(props.to, "end") };
+  const [draft, setDraft] = useState(initial);
   useDebounced(draft, ({ from, to }) => {
-    if (
-      from === (props.from?.toString() ?? "") &&
-      to === (props.to?.toString() ?? "")
-    )
-      return;
-    const cast = (v: string) =>
-      v === "" ? undefined : props.type === "number" ? Number(v) : v;
+    if (from === initial.from && to === initial.to) return;
+    const cast = (v: string, edge: "start" | "end") =>
+      v === ""
+        ? undefined
+        : props.type === "number"
+          ? Number(v)
+          : props.type === "datetime"
+            ? localToIso(v, edge)
+            : v;
+    const next = { from: cast(from, "start"), to: cast(to, "end") };
     props.onChange(
-      from || to
-        ? { operator: "BETWEEN", from: cast(from), to: cast(to) }
+      next.from !== undefined || next.to !== undefined
+        ? { operator: "BETWEEN", ...next }
         : undefined,
     );
   });
   const field = (key: "from" | "to", label: string) => (
     <TextField
+      autoFocus={key === "from"}
       size="small"
-      type={props.type}
+      type={props.type === "datetime" ? "datetime-local" : props.type}
       label={label}
       value={draft[key]}
       onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}

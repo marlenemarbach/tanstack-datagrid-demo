@@ -1,11 +1,11 @@
 import {
   columnFilteringFeature,
   columnGroupingFeature,
+  columnOrderingFeature,
   columnPinningFeature,
   columnResizingFeature,
   columnSizingFeature,
   columnVisibilityFeature,
-  globalFilteringFeature,
   metaHelper,
   rowExpandingFeature,
   rowSortingFeature,
@@ -60,12 +60,12 @@ export interface GridTableMeta {
  */
 export const features = tableFeatures({
   columnVisibilityFeature,
+  columnOrderingFeature,
   columnSizingFeature,
   columnResizingFeature,
   columnPinningFeature,
   rowSortingFeature,
   columnFilteringFeature,
-  globalFilteringFeature,
   columnGroupingFeature,
   rowExpandingFeature,
   columnMeta: metaHelper<GridColumnMeta>(),

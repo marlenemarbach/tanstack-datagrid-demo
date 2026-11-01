@@ -1,12 +1,12 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactElement } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactElement, type ReactNode } from 'react'
 import Box from '@mui/material/Box'
 import type { SxProps, Theme } from '@mui/material/styles'
 import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData, type QueryKey } from '@tanstack/react-query'
-import { flexRender, useTable, type Column, type ColumnFiltersState, type ExpandedState, type Header, type Row, type SortingState } from '@tanstack/react-table'
+import { flexRender, functionalUpdate, useTable, type Column, type ColumnFiltersState, type ColumnOrderState, type ExpandedState, type Header, type OnChangeFn, type Row, type SortingState } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Filter, FilterValue, QueryItem, QueryRequest, QueryResponse } from '../api/orders'
 import { Checkbox, GridCell, renderValue } from './cells'
-import { features, type EditingCell, type Features, type GridColumnDef, type GridTableMeta } from './features'
+import { features, type ColumnType, type EditingCell, type Features, type GridColumnDef, type GridTableMeta } from './features'
 import { FilterPopover, type FilterTarget } from './FilterPopover'
 import { FilterCell } from './FilterRow'
 import { Icon } from './icons'
@@ -21,10 +21,11 @@ import {
   type SelectionState,
 } from './selection'
 
-const ROW_HEIGHT = 36
+const DEFAULT_ROW_HEIGHT = 36
 const HEADER_ROW_HEIGHT = 40
 const FILTER_ROW_HEIGHT = 36
 const MAX_RELOAD = 5000
+const COLUMN_DRAG_TYPE = 'application/x-grid-column'
 
 type Item = QueryItem<unknown>
 type GridRow = Row<Features, Item>
@@ -43,17 +44,33 @@ export interface DataGridProps<T> {
   fetchPage: (request: QueryRequest, signal: AbortSignal) => Promise<QueryResponse<T>>
   updateRecord?: (id: string, patch: Partial<T>) => Promise<T>
   getRecordId: (record: T) => string
-  search?: string
   grouping?: Array<string>
+  /** Controlled sorting; omit to let the grid own it. */
+  sorting?: SortingState
+  onSortingChange?: (sorting: SortingState) => void
+  /** Controlled column filters; omit to let the grid own them. */
+  columnFilters?: ColumnFiltersState
+  onColumnFiltersChange?: (filters: ColumnFiltersState) => void
+  /** Controlled column order (drag headers to reorder); omit to let the grid own it. */
+  columnOrder?: ColumnOrderState
+  onColumnOrderChange?: (order: ColumnOrderState) => void
   editMode?: boolean
+  /** Body row height in px (default 36). */
+  rowHeight?: number
   /** Column ids pinned to the start, after the selection column. */
   pinnedColumns?: Array<string>
   pageSize?: number
   /** One search field per column below the header (default true). */
   filterRow?: boolean
+  /** Vertical borders between header, filter and body cells (default true). */
+  columnBorders?: boolean
+  /** Light grey background on every second row (default false). */
+  stripedRows?: boolean
   /** All visual styling lives here (class selectors), not on individual cells. */
   sx?: SxProps<Theme>
   onSelectionChange?: (selection: SelectionInfo) => void
+  /** Extra controls at the right end of the status bar. */
+  statusBarActions?: ReactNode
   onError?: (error: Error) => void
 }
 
@@ -67,11 +84,26 @@ const serverSideFilter = () => true
  */
 export const DataGrid = memo(function DataGrid<T>(props: DataGridProps<T>) {
   return (
-    <Box className="tg-root" sx={props.sx} data-edit-mode={props.editMode ? 'true' : undefined}>
+    <Box
+      className="tg-root"
+      sx={props.sx}
+      data-edit-mode={props.editMode ? 'true' : undefined}
+      data-column-borders={props.columnBorders !== false ? 'true' : undefined}
+      data-striped-rows={props.stripedRows ? 'true' : undefined}
+      style={{ '--row-height': `${props.rowHeight ?? DEFAULT_ROW_HEIGHT}px` } as CSSProperties}
+    >
       <GridBody {...(props as unknown as DataGridProps<unknown>)} />
     </Box>
   )
 }) as <T>(props: DataGridProps<T>) => ReactElement
+
+/**
+ * Column types whose filter is a select (native or popover button). Their
+ * minimum width keeps "All" + chevron inside the filter cell's padding:
+ * 16 cell padding + 2 border + 8 input padding + ~20 text + 4 gap + 18 chevron (~68), with room for short labels.
+ */
+const SELECT_FILTER_TYPES = new Set<ColumnType | undefined>(['boolean', 'enum', 'status', 'icon'])
+const SELECT_FILTER_MIN_SIZE = 100
 
 const selectColumn: GridColumnDef<unknown> = {
   id: 'select',
@@ -102,18 +134,31 @@ const selectColumn: GridColumnDef<unknown> = {
   },
 }
 
+/** Uses `value`/`onChange` when the parent controls the state, local state otherwise. */
+function useControllable<S>(value: S | undefined, onChange: ((next: S) => void) | undefined, initial: S): [S, OnChangeFn<S>] {
+  const [local, setLocal] = useState(initial)
+  const current = value ?? local
+  const set: OnChangeFn<S> = (updater) => {
+    const next = functionalUpdate(updater, current)
+    if (onChange) onChange(next)
+    if (value === undefined) setLocal(next)
+  }
+  return [current, set]
+}
+
 function GridBody(props: DataGridProps<unknown>) {
   const { queryKey, fetchPage, getRecordId, updateRecord, onError, onSelectionChange } = props
-  const search = props.search ?? ''
   const grouping = props.grouping ?? EMPTY
   const editMode = !!props.editMode
   const pageSize = props.pageSize ?? 200
   const filterRow = props.filterRow ?? true
+  const rowHeight = props.rowHeight ?? DEFAULT_ROW_HEIGHT
   const headerHeight = HEADER_ROW_HEIGHT + (filterRow ? FILTER_ROW_HEIGHT : 0)
   const queryClient = useQueryClient()
 
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [sorting, setSorting] = useControllable(props.sorting, props.onSortingChange, EMPTY)
+  const [columnFilters, setColumnFilters] = useControllable(props.columnFilters, props.onColumnFiltersChange, EMPTY)
+  const [columnOrder, setColumnOrder] = useControllable(props.columnOrder, props.onColumnOrderChange, EMPTY)
   const [expanded, setExpanded] = useState<ExpandedState>({})
   const [selection, setSelection] = useState<SelectionState>(emptySelection)
   const [editing, setEditing] = useState<(EditingCell & { r: number; ci: number }) | null>(null)
@@ -123,7 +168,7 @@ function GridBody(props: DataGridProps<unknown>) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Reset dependent state whenever the result set changes (render-time reset, no extra effect pass).
-  const shape = JSON.stringify([columnFilters, search, grouping])
+  const shape = JSON.stringify([columnFilters, grouping])
   const [prevShape, setPrevShape] = useState(shape)
   if (shape !== prevShape) {
     setPrevShape(shape)
@@ -142,12 +187,11 @@ function GridBody(props: DataGridProps<unknown>) {
   const request = useMemo<QueryRequest>(
     () => ({
       filters: columnFilters.map((f) => ({ field: f.id, ...(f.value as FilterValue) }) as Filter),
-      search: search || undefined,
       sort: sorting.map((s) => `${s.desc ? '-' : '+'}${s.id}`),
       group_by: grouping,
       expanded_groups: expanded === true ? [] : Object.keys(expanded).filter((k) => expanded[k]),
     }),
-    [columnFilters, search, sorting, grouping, expanded],
+    [columnFilters, sorting, grouping, expanded],
   )
 
   const query = useInfiniteQuery({
@@ -203,7 +247,15 @@ function GridBody(props: DataGridProps<unknown>) {
 
   // -- table ----------------------------------------------------------------
 
-  const columns = useMemo(() => [selectColumn, ...(props.columns as Array<GridColumnDef<unknown>>)], [props.columns])
+  const columns = useMemo(
+    () => [
+      selectColumn,
+      ...(props.columns as Array<GridColumnDef<unknown>>).map((c) =>
+        c.minSize === undefined && SELECT_FILTER_TYPES.has(c.meta?.type) ? { ...c, minSize: SELECT_FILTER_MIN_SIZE } : c,
+      ),
+    ],
+    [props.columns],
+  )
   const columnPinning = useMemo(() => ({ start: ['select', ...(props.pinnedColumns ?? [])], end: [] }), [props.pinnedColumns])
 
   const focusRef = useRef<(r: number, ci: number) => void>(() => {})
@@ -235,8 +287,9 @@ function GridBody(props: DataGridProps<unknown>) {
     data: items,
     getRowId: (item) => (item.kind === 'GROUP' ? item.group_path : `#${getRecordId(item.record)}`),
     getRowCanExpand: (row) => row.original.kind === 'GROUP',
-    state: { sorting, columnFilters, globalFilter: search, grouping, expanded, columnPinning },
+    state: { sorting, columnFilters, columnOrder, grouping, expanded, columnPinning },
     onSortingChange: setSorting,
+    onColumnOrderChange: setColumnOrder,
     onColumnFiltersChange: setColumnFilters,
     onExpandedChange: (updater) => {
       reloadSize.current = items.length + pageSize
@@ -271,7 +324,7 @@ function GridBody(props: DataGridProps<unknown>) {
   const rowVirtualizer = useVirtualizer({
     count: rows.length + (hasMore ? 1 : 0),
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => rowHeight,
     overscan: 10,
     scrollMargin: headerHeight,
     getItemKey: (i) => rows[i]?.id ?? '__loader',
@@ -286,6 +339,11 @@ function GridBody(props: DataGridProps<unknown>) {
     scrollMargin: startWidth,
     getItemKey: (i) => centerColumns[i]!.id,
   })
+
+  // Cached row sizes are stale after a zoom change.
+  useLayoutEffect(() => {
+    rowVirtualizer.measure()
+  }, [rowVirtualizer, rowHeight])
 
   useLayoutEffect(() => {
     columnVirtualizer.measure()
@@ -392,16 +450,61 @@ function GridBody(props: DataGridProps<unknown>) {
     }
   }
 
-  const onDoubleClick = (e: MouseEvent<HTMLDivElement>) => {
-    const hit = locate(e.target)
-    if (hit && hit.column?.columnDef.meta?.type !== 'boolean' && canEdit(hit.row, hit.column)) startEdit(hit.row, hit.column!, hit.r, hit.ci)
-  }
-
+  // A single click on an editable cell opens its editor (booleans toggle directly).
   const onClick = (e: MouseEvent<HTMLDivElement>) => {
     const hit = locate(e.target)
     if (!hit?.row) return
     if ((e.target as HTMLElement).closest('.tg-expander')) return hit.row.toggleExpanded()
-    if (hit.column?.columnDef.meta?.type === 'boolean' && canEdit(hit.row, hit.column)) startEdit(hit.row, hit.column, hit.r, hit.ci)
+    if ((e.target as HTMLElement).closest('.tg-editor')) return
+    if (canEdit(hit.row, hit.column)) startEdit(hit.row, hit.column!, hit.r, hit.ci)
+  }
+
+  // -- column reordering (native drag and drop, delegated on the header row) --
+
+  const [dragColumn, setDragColumn] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ id: string; side: 'before' | 'after' } | null>(null)
+
+  const endDrag = () => {
+    setDragColumn(null)
+    setDropTarget(null)
+  }
+
+  const headerAt = (e: DragEvent) => (e.target as HTMLElement).closest<HTMLElement>('[data-reorderable]')
+
+  const onHeaderDragStart = (e: DragEvent<HTMLDivElement>) => {
+    const id = headerAt(e)?.dataset.columnId
+    if (!id) return
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData(COLUMN_DRAG_TYPE, id)
+    setDragColumn(id)
+  }
+
+  const onHeaderDragOver = (e: DragEvent<HTMLDivElement>) => {
+    const th = headerAt(e)
+    if (!dragColumn || !th) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const id = th.dataset.columnId!
+    const rect = th.getBoundingClientRect()
+    const side = e.clientX < rect.left + rect.width / 2 ? 'before' : 'after'
+    const next = id === dragColumn ? null : { id, side } as const
+    setDropTarget((t) => (t?.id === next?.id && t?.side === next?.side ? t : next))
+  }
+
+  const onHeaderDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    if (dragColumn && dropTarget) {
+      // Full current order: listed ids first, the rest in definition order (as TanStack applies it).
+      const all = props.columns.map((c) => c.id!)
+      const order = [...new Set([...columnOrder.filter((id) => all.includes(id)), ...all])].filter((id) => id !== dragColumn)
+      order.splice(order.indexOf(dropTarget.id) + (dropTarget.side === 'after' ? 1 : 0), 0, dragColumn)
+      setColumnOrder(order)
+    }
+    endDrag()
+  }
+
+  const onHeaderDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(null)
   }
 
   // -- render -----------------------------------------------------------------
@@ -409,8 +512,19 @@ function GridBody(props: DataGridProps<unknown>) {
   const startHeaders = table.getStartLeafHeaders()
   const centerHeaders = table.getCenterLeafHeaders()
   const renderHeader = (header: Header<Features, Item, unknown>, ci: number) => (
-    <HeaderCell key={header.id} header={header} ci={ci} table={table} onFilter={(anchor) => setFilterTarget({ column: header.column, anchor })} />
+    <HeaderCell
+      key={header.id}
+      header={header}
+      ci={ci}
+      table={table}
+      dragging={dragColumn === header.column.id}
+      dropSide={dropTarget?.id === header.column.id ? dropTarget.side : undefined}
+      // With the filter row shown, filtering lives there; the header button is the fallback.
+      onFilter={filterRow ? undefined : (anchor) => setFilterTarget({ column: header.column, anchor })}
+    />
   )
+
+  const openFilter = useCallback((column: GridColumn, anchor: HTMLElement) => setFilterTarget({ column, anchor }), [])
 
   const renderFilter = (column: GridColumn, isLastPinned: boolean) => (
     <FilterCell
@@ -420,16 +534,26 @@ function GridBody(props: DataGridProps<unknown>) {
       width={column.getSize()}
       pinnedOffset={column.getIsPinned() === 'start' ? column.getStart('start') : undefined}
       isLastPinned={isLastPinned}
+      onOpen={openFilter}
     />
   )
 
   return (
     <>
       <div className="tg-progress" role="progressbar" aria-busy={query.isFetching} data-active={query.isFetching ? 'true' : undefined} />
-      <div ref={scrollRef} className="tg-scroller" role="grid" aria-rowcount={totalItems} aria-colcount={navColumns.length} onKeyDown={onKeyDown} onClick={onClick} onDoubleClick={onDoubleClick}>
+      <div ref={scrollRef} className="tg-scroller" role="grid" aria-rowcount={totalItems} aria-colcount={navColumns.length} onKeyDown={onKeyDown} onClick={onClick}>
         <div className="tg-canvas" style={{ width: totalWidth }}>
           <div className="tg-header" style={{ width: totalWidth, height: headerHeight }}>
-            <div className="tg-header-row" role="row" style={{ height: HEADER_ROW_HEIGHT }}>
+            <div
+              className="tg-header-row"
+              role="row"
+              style={{ height: HEADER_ROW_HEIGHT }}
+              onDragStart={onHeaderDragStart}
+              onDragOver={onHeaderDragOver}
+              onDragLeave={onHeaderDragLeave}
+              onDrop={onHeaderDrop}
+              onDragEnd={endDrag}
+            >
               {startHeaders.map((h, i) => renderHeader(h, i))}
               <div style={{ width: padLeft, flex: 'none' }} />
               {centerHeaders.slice(colStart, colEnd + 1).map((h, i) => renderHeader(h, startColumns.length + colStart + i))}
@@ -490,6 +614,7 @@ function GridBody(props: DataGridProps<unknown>) {
                   editingColumn={editing?.rowId === row.id ? editing.columnId : null}
                   editMode={editMode}
                   sizing={columnSizing}
+                  columns={navColumns}
                 />
               )
             })}
@@ -504,6 +629,7 @@ function GridBody(props: DataGridProps<unknown>) {
         <span>{items.length.toLocaleString()} loaded</span>
         <span>{navColumns.length} columns ({virtualColumns.length} rendered)</span>
         {selectedCount > 0 && <span className="tg-status-bar-selected">{selectedCount.toLocaleString()} selected</span>}
+        {props.statusBarActions}
       </div>
       {/* Only mounted while open: a closed MUI Popover still renders on every scroll frame. */}
       {filterTarget && <FilterPopover target={filterTarget} onClose={() => setFilterTarget(null)} />}
@@ -521,17 +647,33 @@ function pinnedStyle(column: GridColumn, isLast: boolean) {
     : { className: '', style: undefined }
 }
 
-function HeaderCell({ header, ci, table, onFilter }: { header: Header<Features, Item, unknown>; ci: number; table: GridTable; onFilter: (anchor: HTMLElement) => void }) {
+interface HeaderCellProps {
+  header: Header<Features, Item, unknown>
+  ci: number
+  table: GridTable
+  dragging: boolean
+  dropSide?: 'before' | 'after'
+  onFilter?: (anchor: HTMLElement) => void
+}
+
+function HeaderCell({ header, ci, table, dragging, dropSide, onFilter }: HeaderCellProps) {
   const column = header.column
   const sorted = column.getIsSorted()
   const sortIndex = column.getSortIndex()
   const pin = pinnedStyle(column, column.id === table.getStartVisibleLeafColumns().at(-1)?.id)
   const resize = header.getResizeHandler()
+  // Pinned columns keep their place; everything else can be dragged among the unpinned ones.
+  const reorderable = !column.getIsPinned()
   return (
     <div
       className={`tg-th${pin.className}`}
       role="columnheader"
       data-ci={ci}
+      data-column-id={column.id}
+      data-reorderable={reorderable ? 'true' : undefined}
+      data-dragging={dragging ? 'true' : undefined}
+      data-drop={dropSide}
+      draggable={reorderable}
       aria-sort={sorted ? (sorted === 'asc' ? 'ascending' : 'descending') : undefined}
       style={{ ...pin.style, width: header.getSize() }}
     >
@@ -548,7 +690,7 @@ function HeaderCell({ header, ci, table, onFilter }: { header: Header<Features, 
           <table.FlexRender header={header} />
         </div>
       )}
-      {column.getCanFilter() && (
+      {onFilter && column.getCanFilter() && (
         <button
           type="button"
           className="tg-th-filter"
@@ -563,7 +705,11 @@ function HeaderCell({ header, ci, table, onFilter }: { header: Header<Features, 
         <div
           className="tg-resizer"
           data-resizing={column.getIsResizing() ? 'true' : undefined}
-          onMouseDown={resize}
+          // preventDefault keeps the mousedown from starting a column drag.
+          onMouseDown={(e) => {
+            e.preventDefault()
+            resize(e)
+          }}
           onTouchStart={resize}
           onDoubleClick={() => column.resetSize()}
         />
@@ -587,6 +733,8 @@ interface DataRowProps {
   editMode: boolean
   /** Not read directly; a new object forces re-render when widths change. */
   sizing: unknown
+  /** Not read directly; a new array forces re-render when columns are reordered or (un)pinned. */
+  columns: unknown
 }
 
 /** Memoised: vertical scrolling only renders rows entering the viewport. */
@@ -620,6 +768,7 @@ const DataRow = memo(function DataRow(p: DataRowProps) {
       className="tg-row"
       role="row"
       data-row={p.index}
+      data-alt={p.index % 2 ? 'true' : undefined}
       aria-selected={p.selected}
       data-selected={p.selected ? 'true' : undefined}
       style={{ transform: `translateY(${p.top}px)`, width: p.width }}

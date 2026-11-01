@@ -1,5 +1,4 @@
-import { rankItem } from '@tanstack/match-sorter-utils'
-import { fields, searchableFields, type Order } from './data.ts'
+import { fields, type Order } from './data.ts'
 import { Problem } from './problem.ts'
 
 // ---------------------------------------------------------------------------
@@ -14,7 +13,6 @@ export type Filter =
 
 export interface QueryRequest {
   filters?: Array<Filter>
-  search?: string
   /** Zalando style sort expressions, e.g. `["-created_at", "+customer_name"]`. */
   sort?: Array<string>
   group_by?: Array<string>
@@ -41,7 +39,7 @@ export interface QueryResponse {
   next?: string
   /** Number of items (group headers + records) in the flattened result. */
   total_items: number
-  /** Number of orders matching filters and search. */
+  /** Number of orders matching the filters. */
   total_records: number
 }
 
@@ -215,13 +213,12 @@ export class QueryEngine {
   query(req: QueryRequest): QueryResponse {
     validate(req)
     const filters = req.filters ?? []
-    const search = req.search?.trim() ?? ''
     const sort = parseSort(req.sort ?? [])
     const groupBy = req.group_by ?? []
     const expanded = [...new Set(req.expanded_groups ?? [])].sort()
     const limit = req.limit ?? DEFAULT_LIMIT
 
-    const processKey = JSON.stringify([filters, search, sort, groupBy])
+    const processKey = JSON.stringify([filters, sort, groupBy])
     const flatKey = JSON.stringify([processKey, expanded])
     const hash = fingerprint(flatKey)
 
@@ -236,7 +233,7 @@ export class QueryEngine {
 
     let processed = this.processed.get(processKey)
     if (!processed) {
-      processed = this.process(filters, search, sort, groupBy)
+      processed = this.process(filters, sort, groupBy)
       this.processed.set(processKey, processed)
     }
 
@@ -282,27 +279,8 @@ export class QueryEngine {
     return order
   }
 
-  private process(filters: Array<Filter>, search: string, sort: Array<{ field: string; desc: boolean }>, groupBy: Array<string>) {
-    let rows = filters.length ? this.orders.filter((o) => filters.every((f) => matchesFilter(o, f))) : this.orders.slice()
-
-    if (search) {
-      // Every term has to fuzzy-match some searchable field; ranks add up.
-      const terms = search.split(/\s+/)
-      const accessors = searchableFields.map((f) => (item: Order) => item[f])
-      const ranks = new Map<Order, number>()
-      rows = rows.filter((o) => {
-        let total = 0
-        for (const term of terms) {
-          const info = rankItem(o, term, { accessors })
-          if (!info.passed) return false
-          total += info.rank
-        }
-        ranks.set(o, total)
-        return true
-      })
-      // Best fuzzy matches first unless the client asked for an explicit order.
-      if (!sort.length) rows.sort((a, b) => ranks.get(b)! - ranks.get(a)!)
-    }
+  private process(filters: Array<Filter>, sort: Array<{ field: string; desc: boolean }>, groupBy: Array<string>) {
+    const rows = filters.length ? this.orders.filter((o) => filters.every((f) => matchesFilter(o, f))) : this.orders.slice()
 
     // Group fields sort first (honouring a requested direction), then the rest.
     const keys = [

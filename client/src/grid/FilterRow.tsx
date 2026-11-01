@@ -2,16 +2,21 @@ import { memo, useEffect, useRef, useState } from 'react'
 import type { Column } from '@tanstack/react-table'
 import type { FilterValue, QueryItem } from '../api/orders'
 import type { Features, GridColumnMeta } from './features'
+import { isoToLocal, localToIso } from './filterDates'
+import { Icon } from './icons'
 
 type AnyColumn = Column<Features, QueryItem<unknown>, unknown>
 
 /**
  * One search field per column, rendered as a second header row. It edits the
- * same TanStack column filter state as the header popover, so both stay in sync.
+ * TanStack column filter state that is sent to the server.
  *
  * Text columns: "contains". Number/date columns accept small expressions,
  * all bounds inclusive:  `42`  `>10`  `<10`  `10..20`  `2025`  `2025-03`  `>2025-01-01`.
- * Discrete columns (enum/status/icon/boolean) use a native <select>.
+ * Datetime columns also take a local time:  `2025-03-14 10:30`  `>2025-03-14 08:00`.
+ * Those columns also get a button that opens the popover's From/To fields
+ * (native date / date-time pickers). Boolean columns use a native <select>;
+ * enum/status/icon columns open the popover's checkbox list for multi-select.
  */
 export const FilterCell = memo(function FilterCell(props: {
   column: AnyColumn
@@ -20,8 +25,10 @@ export const FilterCell = memo(function FilterCell(props: {
   width: number
   pinnedOffset: number | undefined
   isLastPinned: boolean
+  /** Opens the multi-select popover; must be stable so memo holds. */
+  onOpen: (column: AnyColumn, anchor: HTMLElement) => void
 }) {
-  const { column, value, width, pinnedOffset, isLastPinned } = props
+  const { column, value, width, pinnedOffset, isLastPinned, onOpen } = props
   const meta = column.columnDef.meta ?? {}
   const className = `tg-fc${pinnedOffset !== undefined ? ' tg-pinned' : ''}${isLastPinned ? ' tg-pinned-last' : ''}`
   const style = { width, insetInlineStart: pinnedOffset }
@@ -52,32 +59,25 @@ export const FilterCell = memo(function FilterCell(props: {
     case 'status':
     case 'icon': {
       const values = value?.operator === 'IN' ? value.values : []
+      const summary =
+        values.length === 0 ? 'All' : values.length === 1 ? (meta.options?.find((o) => o.value === values[0])?.label ?? values[0]) : `${values.length} selected`
       field = (
-        <select
-          className="tg-filter-input"
+        <button
+          type="button"
+          className="tg-filter-input tg-filter-select"
           aria-label={`Filter ${header}`}
+          aria-haspopup="dialog"
           data-active={values.length ? 'true' : undefined}
-          value={values.length > 1 ? '__multiple' : (values[0] ?? '')}
-          onChange={(e) => set(e.target.value === '' ? undefined : { operator: 'IN', values: [e.target.value] })}
+          onClick={(e) => onOpen(column, e.currentTarget)}
         >
-          <option value="">All</option>
-          {/* Multi-select is set via the popover; shown here as a summary. */}
-          {values.length > 1 && (
-            <option value="__multiple" disabled>
-              {values.length} selected
-            </option>
-          )}
-          {meta.options?.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          <span className="tg-filter-select-text">{summary}</span>
+          <Icon name="chevron-down" />
+        </button>
       )
       break
     }
     default:
-      field = <TextFilterInput meta={meta} header={header} value={value} onChange={set} />
+      field = <TextFilterInput meta={meta} header={header} value={value} onChange={set} onOpenRange={(anchor) => onOpen(column, anchor)} />
   }
 
   return (
@@ -87,9 +87,15 @@ export const FilterCell = memo(function FilterCell(props: {
   )
 })
 
-function TextFilterInput(props: { meta: GridColumnMeta; header: string; value: FilterValue | undefined; onChange: (v: FilterValue | undefined) => void }) {
-  const { meta, value, onChange } = props
-  const kind = meta.type === 'number' ? 'number' : meta.type === 'date' || meta.type === 'datetime' ? 'date' : 'text'
+function TextFilterInput(props: {
+  meta: GridColumnMeta
+  header: string
+  value: FilterValue | undefined
+  onChange: (v: FilterValue | undefined) => void
+  onOpenRange: (anchor: HTMLElement) => void
+}) {
+  const { meta, value, onChange, onOpenRange } = props
+  const kind = meta.type === 'number' || meta.type === 'date' || meta.type === 'datetime' ? meta.type : 'text'
   const external = toText(value)
   const [draft, setDraft] = useState(external)
   const ref = useRef<HTMLInputElement>(null)
@@ -107,7 +113,7 @@ function TextFilterInput(props: { meta: GridColumnMeta; header: string; value: F
     // Only the draft restarts the timer; `parsed` derives from it.
   }, [draft])
 
-  return (
+  const input = (
     <input
       ref={ref}
       className="tg-filter-input"
@@ -115,7 +121,7 @@ function TextFilterInput(props: { meta: GridColumnMeta; header: string; value: F
       aria-label={`Filter ${props.header}`}
       aria-invalid={parsed === INVALID ? true : undefined}
       data-active={value ? 'true' : undefined}
-      placeholder={kind === 'number' ? '>10, 10..20' : kind === 'date' ? '2025-03, >2025-01-01' : 'Search'}
+      placeholder={kind === 'number' ? '>10, 10..20' : kind === 'date' ? '2025-03, >2025-01-01' : kind === 'datetime' ? '2025-03, >2025-03-14 10:30' : 'Search'}
       title={kind === 'text' ? undefined : 'Exact value, >x, <x or x..y (inclusive)'}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
@@ -123,6 +129,29 @@ function TextFilterInput(props: { meta: GridColumnMeta; header: string; value: F
         if (e.key === 'Escape') setDraft('')
       }}
     />
+  )
+  if (kind === 'text')
+    return (
+      <div className="tg-filter-search">
+        <Icon name="search" />
+        {input}
+      </div>
+    )
+
+  return (
+    <div className="tg-filter-range">
+      {input}
+      <button
+        type="button"
+        className="tg-filter-range-btn"
+        aria-label={kind !== 'number' ? `Pick ${props.header} date range` : `Set ${props.header} range`}
+        aria-haspopup="dialog"
+        title={kind !== 'number' ? 'Pick dates' : 'Set range'}
+        onClick={(e) => onOpenRange(e.currentTarget.parentElement!)}
+      >
+        <Icon name={kind !== 'number' ? 'date-range' : 'tune'} />
+      </button>
+    </div>
   )
 }
 
@@ -136,15 +165,19 @@ function toText(value: FilterValue | undefined): string {
   if (!value) return ''
   if (value.operator === 'CONTAINS') return value.value
   if (value.operator === 'BETWEEN') {
-    if (value.from !== undefined && value.from === value.to) return String(value.from)
-    if (value.to === undefined) return `>${value.from}`
-    if (value.from === undefined) return `<${value.to}`
-    return `${value.from}..${value.to}`
+    // ISO datetimes show as local minutes, so a single-minute range collapses to one value.
+    const show = (v: string | number | undefined) => (v === undefined ? '' : typeof v === 'string' ? isoToLocal(v).replace('T', ' ') : String(v))
+    const from = show(value.from)
+    const to = show(value.to)
+    if (from && from === to) return from
+    if (!to) return from && `>${from}`
+    if (!from) return `<${to}`
+    return `${from}..${to}`
   }
   return ''
 }
 
-function parse(kind: 'text' | 'number' | 'date', raw: string): FilterValue | undefined | typeof INVALID {
+function parse(kind: 'text' | 'number' | 'date' | 'datetime', raw: string): FilterValue | undefined | typeof INVALID {
   const text = raw.trim()
   if (!text) return undefined
   if (kind === 'text') return { operator: 'CONTAINS', value: text }
@@ -157,7 +190,7 @@ function parse(kind: 'text' | 'number' | 'date', raw: string): FilterValue | und
   else if (/^<=?/.test(text)) hi = text.replace(/^<=?/, '').trim()
   else lo = hi = text
 
-  const bound = kind === 'number' ? numberBound : dateBound
+  const bound = kind === 'number' ? numberBound : kind === 'datetime' ? datetimeBound : dateBound
   const from = lo ? bound(lo, 'start') : undefined
   const to = hi ? bound(hi, 'end') : undefined
   if (from === INVALID || to === INVALID || (from === undefined && to === undefined)) return INVALID
@@ -167,6 +200,12 @@ function parse(kind: 'text' | 'number' | 'date', raw: string): FilterValue | und
 function numberBound(s: string): number | typeof INVALID {
   const n = Number(s.replace(',', '.'))
   return s !== '' && Number.isFinite(n) ? n : INVALID
+}
+
+/** `2025-03-14 10:30` -> UTC ISO; anything else is treated as a date. */
+function datetimeBound(s: string, edge: 'start' | 'end'): string | typeof INVALID {
+  if (!/[ T]/.test(s)) return dateBound(s, edge)
+  return localToIso(s, edge) ?? INVALID
 }
 
 /** `2025` / `2025-03` / `2025-03-14` -> first or last day of that period. */

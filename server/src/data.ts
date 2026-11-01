@@ -102,9 +102,6 @@ export const fields: Record<string, FieldDescriptor> = {
   ...Object.fromEntries(kpiKeys.map((k) => [k, { type: 'number', editable: true } satisfies FieldDescriptor])),
 }
 
-/** Fields used by the fuzzy search. */
-export const searchableFields = ['order_id', 'customer_name', 'email', 'company', 'city', 'sales_rep'] as const
-
 export function generateOrders(count: number, seed = 42): Order[] {
   const r = rng(seed)
   const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(r() * arr.length)]!
