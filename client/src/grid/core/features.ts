@@ -10,11 +10,14 @@ import {
   rowExpandingFeature,
   rowSortingFeature,
   tableFeatures,
+  type Column,
   type ColumnDef,
+  type Header,
+  type Row,
 } from '@tanstack/react-table'
-import type { QueryItem } from '../api/orders'
-import type { IconName } from './icons'
+import type { IconName } from '../icons/icons'
 import type { SelectionState } from './selection'
+import type { QueryItem } from './types'
 
 export type ColumnType = 'text' | 'number' | 'date' | 'datetime' | 'boolean' | 'enum' | 'status' | 'icon'
 export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'error' | 'primary'
@@ -74,3 +77,10 @@ export const features = tableFeatures({
 
 export type Features = typeof features
 export type GridColumnDef<T> = ColumnDef<Features, QueryItem<T>, unknown>
+
+// Untyped (record = unknown) aliases used inside the grid.
+export type GridItem = QueryItem<unknown>
+export type GridRow = Row<Features, GridItem>
+export type GridColumn = Column<Features, GridItem, unknown>
+export type GridHeader = Header<Features, GridItem, unknown>
+export type GridCellObj = ReturnType<GridRow['getAllCells']>[number]

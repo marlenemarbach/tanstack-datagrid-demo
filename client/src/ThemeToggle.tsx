@@ -1,7 +1,7 @@
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import { useColorScheme } from "@mui/material/styles";
-import { Icon } from "./grid/icons";
+import { Icon } from "./grid";
 
 export const ThemeToggle = () => {
   const { mode, systemMode, setMode } = useColorScheme();

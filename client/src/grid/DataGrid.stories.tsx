@@ -5,14 +5,14 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import type { ColumnFiltersState, ColumnOrderState, SortingState } from '@tanstack/react-table'
 import type { Order } from '../api/orders'
-import { gridSx } from '../App.styles'
 import { orderColumns } from '../columns'
 import { createOrdersApi, type MockOptions } from '../stories/mockOrders'
 import { DataGrid, type DataGridProps } from './DataGrid'
+import { tanstackDataSource } from './data/tanstackDataSource'
 
 type GridProps = DataGridProps<Order>
 type OrdersGridProps = MockOptions &
-  Partial<Omit<GridProps, 'queryKey' | 'columns' | 'fetchPage' | 'updateRecord' | 'getRecordId'>> & {
+  Partial<Omit<GridProps, 'columns' | 'useData' | 'getRecordId'>> & {
     /** Seeds the grid's sorting / filters / column order; the story then owns them like the app does. */
     sorting?: SortingState
     columnFilters?: ColumnFiltersState
@@ -23,8 +23,10 @@ const getOrderId = (order: Order) => order.order_id
 
 /** The grid wired like the app: controlled sorting, filters and column order, data from an in-browser mock API. */
 function OrdersGrid({ rows, latency, fail, hang, sorting: initialSorting, columnFilters: initialFilters, columnOrder: initialOrder, ...props }: OrdersGridProps) {
-  const api = useMemo(() => createOrdersApi({ rows, latency, fail, hang }), [rows, latency, fail, hang])
-  const queryKey = useMemo(() => ['orders', rows, latency, fail, hang], [rows, latency, fail, hang])
+  const useOrders = useMemo(() => {
+    const api = createOrdersApi({ rows, latency, fail, hang })
+    return tanstackDataSource({ queryKey: ['orders', rows, latency, fail, hang], fetchPage: api.fetchPage, updateRecord: api.updateRecord })
+  }, [rows, latency, fail, hang])
   const [sorting, setSorting] = useState(initialSorting ?? [])
   const [columnFilters, setColumnFilters] = useState(initialFilters ?? [])
   const [columnOrder, setColumnOrder] = useState(initialOrder ?? [])
@@ -32,10 +34,8 @@ function OrdersGrid({ rows, latency, fail, hang, sorting: initialSorting, column
   return (
     <Box sx={{ height: 560, display: 'flex', flexDirection: 'column' }}>
       <DataGrid
-        queryKey={queryKey}
         columns={orderColumns}
-        fetchPage={api.fetchPage}
-        updateRecord={api.updateRecord}
+        useData={useOrders}
         getRecordId={getOrderId}
         sorting={sorting}
         onSortingChange={setSorting}
@@ -43,7 +43,6 @@ function OrdersGrid({ rows, latency, fail, hang, sorting: initialSorting, column
         onColumnFiltersChange={setColumnFilters}
         columnOrder={columnOrder}
         onColumnOrderChange={setColumnOrder}
-        sx={gridSx}
         {...props}
       />
     </Box>

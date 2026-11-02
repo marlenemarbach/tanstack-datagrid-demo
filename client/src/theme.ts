@@ -1,5 +1,5 @@
 import { createTheme } from "@mui/material/styles";
-import { checkboxStyles } from "./checkbox.styles";
+import { checkboxStyles } from "./grid";
 
 /** App theme; shared with Storybook. */
 const primary = { main: "#00BFEA" };

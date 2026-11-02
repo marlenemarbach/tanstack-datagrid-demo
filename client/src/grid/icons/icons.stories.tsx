@@ -3,7 +3,7 @@ import Box from '@mui/material/Box'
 import { Icon, iconNames } from './icons'
 
 const meta = {
-  title: 'Grid/Icon',
+  title: 'Grid/Icons/Icon',
   component: Icon,
   parameters: {
     docs: {

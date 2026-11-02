@@ -1,9 +1,9 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { Column } from '@tanstack/react-table'
-import type { FilterValue, QueryItem } from '../api/orders'
-import type { Features, GridColumnMeta } from './features'
+import type { FilterValue, QueryItem } from '../core/types'
+import type { Features, GridColumnMeta } from '../core/features'
 import { isoToLocal, localToIso } from './filterDates'
-import { Icon } from './icons'
+import { Icon } from '../icons/icons'
 
 type AnyColumn = Column<Features, QueryItem<unknown>, unknown>
 

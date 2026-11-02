@@ -2,10 +2,10 @@ import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { fn } from 'storybook/test'
 import Stack from '@mui/material/Stack'
-import { Checkbox } from './cells'
+import { Checkbox } from './Checkbox'
 
 const meta = {
-  title: 'Grid/Checkbox',
+  title: 'Grid/Cells/Checkbox',
   component: Checkbox,
   parameters: {
     docs: {

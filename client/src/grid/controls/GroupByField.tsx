@@ -2,18 +2,21 @@ import { useState, type DragEvent } from "react";
 import Autocomplete from "@mui/material/Autocomplete";
 import Chip from "@mui/material/Chip";
 import TextField from "@mui/material/TextField";
-import { groupableColumns } from "./columns";
 
-type GroupColumn = (typeof groupableColumns)[number];
+/** A column the grid can be grouped by. */
+export type GroupByOption = { id: string; label: string };
 type DropTarget = { index: number; side: "before" | "after" };
 
 type GroupByFieldProps = {
-  value: Array<GroupColumn>;
+  /** Groupable columns. */
+  options: Array<GroupByOption>;
+  /** Current grouping, outermost level first. */
+  value: Array<GroupByOption>;
   onChange: (ids: Array<string>) => void;
 };
 
 /** Multi-select of group-by columns; drag the chips to change the nesting order. */
-export function GroupByField({ value, onChange }: GroupByFieldProps) {
+export function GroupByField({ options, value, onChange }: GroupByFieldProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
 
@@ -53,7 +56,7 @@ export function GroupByField({ value, onChange }: GroupByFieldProps) {
     <Autocomplete
       multiple
       size="small"
-      options={groupableColumns}
+      options={options}
       value={value}
       onChange={(_, v) => onChange(v.map((c) => c.id))}
       isOptionEqualToValue={(a, b) => a.id === b.id}
@@ -85,7 +88,10 @@ export function GroupByField({ value, onChange }: GroupByFieldProps) {
               sx={{
                 cursor: "grab",
                 position: "relative",
-                opacity: dragIndex === index ? 0.5 : 1,
+                // Own compositing layer, so Chromium keeps the corners outside the
+                // rounded chip transparent in the drag preview.
+                transform: "translate(0, 0)",
+                opacity: dragIndex === index ? 1 : 1,
                 "&::after": drop
                   ? {
                       content: '""',

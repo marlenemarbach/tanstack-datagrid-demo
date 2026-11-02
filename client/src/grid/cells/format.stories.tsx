@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { orderColumns } from '../columns'
-import { GridStyles } from '../stories/GridStyles'
-import { renderValue } from './cells'
-import type { GridColumnMeta } from './features'
+import { orderColumns } from '../../columns'
+import { GridStyles } from '../../stories/GridStyles'
+import { renderValue } from './format'
+import type { GridColumnMeta } from '../core/features'
 
 const metaOf = (id: string) => orderColumns.find((c) => c.id === id)!.meta as GridColumnMeta
 
@@ -27,7 +27,7 @@ function ValueList({ columnId, values }: { columnId: string; values?: Array<unkn
 }
 
 const meta = {
-  title: 'Grid/Cell values',
+  title: 'Grid/Cells/Values',
   component: ValueList,
   parameters: {
     docs: {

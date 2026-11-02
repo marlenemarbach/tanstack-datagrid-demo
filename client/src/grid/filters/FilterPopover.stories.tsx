@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import type { ColumnFiltersState } from '@tanstack/react-table'
-import { useDemoTable } from '../stories/useDemoTable'
+import { useDemoTable } from '../../stories/useDemoTable'
 import { FilterPopover, type FilterTarget } from './FilterPopover'
 
 function FilterPopoverDemo({ columnId, initialFilters }: { columnId: string; initialFilters?: ColumnFiltersState }) {
@@ -29,7 +29,7 @@ function FilterPopoverDemo({ columnId, initialFilters }: { columnId: string; ini
 }
 
 const meta = {
-  title: 'Grid/FilterPopover',
+  title: 'Grid/Filters/FilterPopover',
   component: FilterPopoverDemo,
   parameters: {
     docs: {

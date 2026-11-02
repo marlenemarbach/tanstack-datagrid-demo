@@ -33,7 +33,7 @@ Pushes to `main` deploy to GitHub Pages (`.github/workflows/pages.yml`): the app
 
 | Feature | Where | Notes |
 | --- | --- | --- |
-| Server state | `grid/DataGrid.tsx` | `useInfiniteQuery`; sorting, filters, grouping and expanded groups are part of the query key. `keepPreviousData` avoids flashes. |
+| Server state | `grid/data/` | The grid asks a `useData` hook for pages and edits. Adapters for TanStack Query (`tanstackDataSource`, `keepPreviousData` avoids flashes) and RTK Query (`rtkDataSource`); sorting, filters, grouping and expanded groups are part of the cache key. |
 | Infinite scroll | `DataGrid.tsx` | Cursor pages of 200; the next page loads when the last 20 rows come into view. |
 | Row virtualization | `DataGrid.tsx` | `@tanstack/react-virtual`, fixed 36px rows, rows are `memo`ised so vertical scrolling only renders new rows. |
 | Column virtualization | `DataGrid.tsx` | Horizontal virtualizer over the unpinned columns; pinned columns are sticky. 66 columns, ~14–20 rendered. |
@@ -41,16 +41,16 @@ Pushes to `main` deploy to GitHub Pages (`.github/workflows/pages.yml`): the app
 | Filtering | filter icon in each header → MUI `Popover` over the header cell | Text (contains), number/date range, boolean, multi-select for enum/status/icon columns. The TanStack filter value *is* the API filter shape. |
 | Per-column search | filter row under the header | One field per column, synced with the popover. Text: contains. Number/date: `42`, `>10`, `<10`, `10..20`, `2025`, `2025-03`, all bounds inclusive; invalid input is marked and not sent. Enum/status/icon/boolean: native `<select>`. Disable with `filterRow={false}`. |
 | Grouping | toolbar (multi-level) | Server side. The API returns a flattened list of group headers and records of expanded groups, so grouping works with infinite scroll and virtualization. |
-| Row + group checkboxes | `grid/selection.ts` | Selection is stored as scope decisions (`all`, group path, record), so selecting a collapsed group with 3,000 unloaded records is exact and can be sent to a bulk endpoint. Group checkboxes show indeterminate state, and the count is exact. |
+| Row + group checkboxes | `grid/core/selection.ts` | Selection is stored as scope decisions (`all`, group path, record), so selecting a collapsed group with 3,000 unloaded records is exact and can be sent to a bulk endpoint. Group checkboxes show indeterminate state, and the count is exact. |
 | Edit mode | toolbar switch | Editable cells are styled like inputs; a real `<input>`/`<select>` only mounts for the cell being edited, on the first keystroke (seeded with it), Enter/F2 or double-click. Enter commits, Esc cancels. Booleans toggle on click/Space. Optimistic update + rollback via `PATCH` (merge patch). |
 | Keyboard | | Arrow keys move between cells (scrolling virtualized rows and columns), ←/→ collapse/expand on group rows, Space toggles selection. |
-| Icons | `grid/icons.tsx` | One SVG sprite (`<symbol>`s) mounted once; cells only render `<svg><use href="#…"/></svg>`. |
-| Status indicators | `renderValue` in `grid/cells.tsx` | `<span class="tg-status" data-tone="success">`, coloured from the theme. |
-| Boolean / date / number formatting | `grid/cells.tsx` | Cached `Intl` formatters; per-column `meta.format`. |
+| Icons | `grid/icons/icons.tsx` | One SVG sprite (`<symbol>`s) mounted once; cells only render `<svg><use href="#…"/></svg>`. |
+| Status indicators | `renderValue` in `grid/cells/format.tsx` | `<span class="tg-status" data-tone="success">`, coloured from the theme. |
+| Boolean / date / number formatting | `grid/cells/format.tsx` | Cached `Intl` formatters; per-column `meta.format`. |
 
-### Styling: the parent holds the `sx`
+### Styling: one `sx` on the root
 
-All grid styles are in `client/src/App.styles.ts` (`gridSx`), owned by the parent and passed as `<DataGrid sx={gridSx} />`. They are applied once on the grid root and target class names (`.tg-row`, `.tg-cell`, …). Cells are plain elements with no `sx`/styled components, so there is no per-cell Emotion work. The styled root is outside the component that re-renders on scroll, so the `sx` is not re-serialised on every frame.
+All grid styles are in `grid/styles/gridSx.ts` (`gridSx`) and ship with the grid; a consumer `sx` is layered on top. They are applied once on the grid root and target class names (`.tg-row`, `.tg-cell`, …). Cells are plain elements with no `sx`/styled components, so there is no per-cell Emotion work. The styled root is outside the component that re-renders on scroll, so the `sx` is not re-serialised on every frame.
 
 MUI is used where it adds value (toolbar inputs, Autocomplete, Switch, Popover and its form controls, Snackbar, progress bar) and not inside the hot cell-render path (cells use native checkboxes and inputs).
 
@@ -79,7 +79,7 @@ Guideline points applied: snake_case properties, UPPER_SNAKE_CASE enums, no `/ap
 
 ## TanStack Table v9 notes
 
-- Features are registered explicitly (`grid/features.ts`). No client row models are registered because the server owns processing (`manual*` flags).
+- Features are registered explicitly (`grid/core/features.ts`). No client row models are registered because the server owns processing (`manual*` flags).
 - Column/table meta types are scoped via `metaHelper` slots, with no global module augmentation.
 - `useTable` returns a new wrapper object every render, so don't pass `table` into memoised rows.
 - `<table.FlexRender cell>` renders `null` for cells of grouped columns (placeholders), and `groupedColumnMode` defaults to `'reorder'`. With server grouping, the grid uses `flexRender()` directly and `groupedColumnMode: false`.

@@ -1,4 +1,4 @@
-import type { Order, QueryRequest, QueryResponse } from '../api/orders'
+import type { Order, QueryItem, QueryRequest, QueryResponse } from '../api/orders'
 // Stories only: the real server engine, run in the browser instead of behind HTTP.
 import { generateOrders } from '../../../server/src/data.ts'
 import { QueryEngine } from '../../../server/src/query.ts'
@@ -42,10 +42,16 @@ export function createOrdersApi({ rows = 5000, latency = 150, fail, hang }: Mock
     if (hang) return new Promise<R>(() => {})
     await delay(latency, signal)
     if (fail) throw new Error(fail)
-    return run()
+    // A copy, like a real response: libraries that freeze their cache (RTK Query) must not freeze the engine's records.
+    return structuredClone(run())
   }
   return {
     fetchPage: (request, signal) => respond(() => engine(rows).query(request) as unknown as QueryResponse<Order>, signal),
     updateRecord: (id, patch) => respond(() => engine(rows).patch(id, patch) as unknown as Order),
   }
+}
+
+/** Items for one request, synchronously: for stories that render grid parts without a data source. */
+export function sampleItems(request: QueryRequest = {}, rows = 5000): Array<QueryItem<Order>> {
+  return structuredClone((engine(rows).query({ limit: 50, ...request }) as unknown as QueryResponse<Order>).items)
 }

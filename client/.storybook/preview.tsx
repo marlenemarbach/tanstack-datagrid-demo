@@ -3,7 +3,7 @@ import type { Decorator, Preview } from '@storybook/react-vite'
 import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider, useColorScheme } from '@mui/material/styles'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { IconSprite } from '../src/grid/icons'
+import { IconSprite } from '../src/grid'
 import { theme } from '../src/theme'
 
 type Mode = 'light' | 'dark'

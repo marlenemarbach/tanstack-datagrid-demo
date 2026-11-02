@@ -4,7 +4,7 @@ import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
-import { IconSprite } from "./grid/icons";
+import { IconSprite } from "./grid";
 import { restoreSavedView } from "./savedView";
 import { theme } from "./theme";
 

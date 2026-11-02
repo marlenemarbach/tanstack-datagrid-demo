@@ -7,11 +7,14 @@ import Stack from "@mui/material/Stack";
 import Switch from "@mui/material/Switch";
 import Typography from "@mui/material/Typography";
 import { patchOrder, queryOrders, type Order } from "./api/orders";
-import { gridSx } from "./App.styles";
 import { groupableColumns, orderColumns } from "./columns";
-import { DataGrid } from "./grid/DataGrid";
 import { AppSettings } from "./AppSettings";
-import { GroupByField } from "./GroupByField";
+import {
+  DataGrid,
+  EditModeToggle,
+  GroupByField,
+  tanstackDataSource,
+} from "./grid";
 import { TableViewActions } from "./TableViewActions";
 import { ThemeToggle } from "./ThemeToggle";
 import { viewFromParams } from "./savedView";
@@ -32,6 +35,11 @@ import type { ColumnFiltersState, SortingState } from "@tanstack/react-table";
 
 const ordersKey = ["orders"] as const;
 const getOrderId = (order: Order) => order.order_id;
+const useOrders = tanstackDataSource({
+  queryKey: ordersKey,
+  fetchPage: queryOrders,
+  updateRecord: patchOrder,
+});
 
 // Query settings live in the URL, so a view is linkable and survives reloads.
 const onGroupingChange = (ids: Array<string>) =>
@@ -137,24 +145,18 @@ export function App() {
         direction="row"
         sx={{ justifyContent: "space-between", alignItems: "flex-end" }}
       >
-        <GroupByField value={grouping} onChange={onGroupingChange} />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={editMode}
-              onChange={(e) => setEditMode(e.target.checked)}
-            />
-          }
-          label="Edit mode"
+        <GroupByField
+          options={groupableColumns}
+          value={grouping}
+          onChange={onGroupingChange}
         />
+        <EditModeToggle value={editMode} onChange={setEditMode} />
       </Stack>
 
       <DataGrid
-        queryKey={ordersKey}
         columns={orderColumns}
         // pinnedColumns={pinnedColumns}
-        fetchPage={queryOrders}
-        updateRecord={patchOrder}
+        useData={useOrders}
         getRecordId={getOrderId}
         grouping={useGroupingArray(groupIds)}
         sorting={sorting}
@@ -169,7 +171,6 @@ export function App() {
         stripedRows={stripedRows}
         statusBarActions={viewActions}
         onError={onGridError}
-        sx={gridSx}
       />
 
       <Snackbar

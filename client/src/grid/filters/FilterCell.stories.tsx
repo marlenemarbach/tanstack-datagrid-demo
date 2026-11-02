@@ -3,11 +3,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { expect, userEvent, within } from 'storybook/test'
 import Box from '@mui/material/Box'
 import type { ColumnFiltersState } from '@tanstack/react-table'
-import type { FilterValue } from '../api/orders'
-import { GridStyles } from '../stories/GridStyles'
-import { useDemoTable } from '../stories/useDemoTable'
+import type { FilterValue } from '../core/types'
+import { GridStyles } from '../../stories/GridStyles'
+import { useDemoTable } from '../../stories/useDemoTable'
 import { FilterPopover, type FilterTarget } from './FilterPopover'
-import { FilterCell } from './FilterRow'
+import { FilterCell } from './FilterCell'
 
 /** One example column per filter kind. */
 const allColumns = ['customer_name', 'order_value', 'delivery_date', 'created_at', 'is_paid', 'status', 'priority', 'currency']
@@ -55,7 +55,7 @@ function FilterRowDemo({ columns, initialFilters }: { columns: Array<string>; in
 }
 
 const meta = {
-  title: 'Grid/FilterRow',
+  title: 'Grid/Filters/FilterCell',
   component: FilterRowDemo,
   parameters: {
     docs: {

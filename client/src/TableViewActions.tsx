@@ -2,7 +2,7 @@ import { useState } from "react";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
-import { Icon } from "./grid/icons";
+import { Icon } from "./grid";
 import { parseZoom, rowHeights, serializeZoom } from "./queryParams";
 import { setUrlParams } from "./urlState";
 import { clearView, emptyView, loadView, sameView, saveView, type View } from "./savedView";

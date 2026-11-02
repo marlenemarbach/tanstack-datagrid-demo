@@ -1,5 +1,5 @@
 import type { Order, QueryItem } from "./api/orders";
-import type { GridColumnDef, GridColumnMeta, OptionDef } from "./grid/features";
+import type { GridColumnDef, GridColumnMeta, OptionDef } from "./grid";
 
 const opts = (values: Array<string>): Array<OptionDef> =>
   values.map((value) => ({

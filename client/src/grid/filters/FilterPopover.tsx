@@ -8,10 +8,10 @@ import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
 import type { Column } from "@tanstack/react-table";
-import type { FilterValue, QueryItem } from "../api/orders";
-import { Checkbox } from "./cells";
+import type { FilterValue, QueryItem } from "../core/types";
+import { Checkbox } from "../cells/Checkbox";
 import { isoToLocal, localToIso } from "./filterDates";
-import type { Features } from "./features";
+import type { Features } from "../core/features";
 
 type AnyColumn = Column<Features, QueryItem<unknown>, unknown>;
 

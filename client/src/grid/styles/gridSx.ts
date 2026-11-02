@@ -1,5 +1,5 @@
 import { alpha, type SxProps, type Theme } from "@mui/material/styles";
-import type { Tone } from "./grid/features";
+import type { Tone } from "../core/features";
 
 const tones: Array<Exclude<Tone, "neutral">> = [
   "info",
