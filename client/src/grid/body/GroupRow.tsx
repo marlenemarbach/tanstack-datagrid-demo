@@ -44,5 +44,6 @@ export const GroupRow = memo(
   },
   // onSelect is recreated each render but only closes over the group path.
   (a, b) =>
-    a.row === b.row && a.top === b.top && a.width === b.width && a.expanded === b.expanded && a.checked === b.checked && a.indeterminate === b.indeterminate && a.index === b.index,
+    a.row === b.row &&
+    a.column === b.column && a.top === b.top && a.width === b.width && a.expanded === b.expanded && a.checked === b.checked && a.indeterminate === b.indeterminate && a.index === b.index,
 )

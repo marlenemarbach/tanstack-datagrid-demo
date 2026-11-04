@@ -3,8 +3,12 @@
  * everything not exported is internal and may change.
  */
 
-// Grid
+// Grid: `<DataGrid>` with the default parts, or `DataGrid.Root` / `.Viewport` / `.StatusBar` composed
 export { DataGrid, type DataGridProps, type SelectionInfo } from './DataGrid'
+export type { GridRootProps } from './GridRoot'
+export type { GridViewportProps } from './GridViewport'
+export { useGridStatus } from './context'
+export type { GridStatus } from './model/useGridModel'
 
 // Columns
 export { features, type ColumnType, type EditingCell, type Features, type GridColumnDef, type GridColumnMeta, type GridTableMeta, type OptionDef, type Tone } from './core/features'

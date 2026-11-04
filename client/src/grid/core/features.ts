@@ -13,6 +13,7 @@ import {
   type Column,
   type ColumnDef,
   type Header,
+  type ReactTable,
   type Row,
 } from '@tanstack/react-table'
 import type { IconName } from '../icons/icons'
@@ -84,3 +85,4 @@ export type GridRow = Row<Features, GridItem>
 export type GridColumn = Column<Features, GridItem, unknown>
 export type GridHeader = Header<Features, GridItem, unknown>
 export type GridCellObj = ReturnType<GridRow['getAllCells']>[number]
+export type GridTable = ReactTable<Features, GridItem>

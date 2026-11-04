@@ -1,4 +1,5 @@
 import type { GridColumnDef } from '../core/features'
+import { recordIdOf } from '../core/rowId'
 import { allCheckState, isRecordSelected } from '../core/selection'
 import { Checkbox } from './Checkbox'
 
@@ -21,7 +22,7 @@ export const selectColumn: GridColumnDef<unknown> = {
     const item = row.original
     if (item.kind !== 'RECORD') return null
     const meta = table.options.meta!
-    const id = row.id.slice(1)
+    const id = recordIdOf(row.id)
     return (
       <Checkbox
         label="Select row"

@@ -49,7 +49,12 @@ export const HeaderCell = memo(function HeaderCell({ header, ci, dragging, dropS
           <span className="tg-th-text">
             <FlexRender header={header} />
           </span>
-          {sorted && <Icon name={sorted === 'asc' ? 'arrow-up' : 'arrow-down'} className="tg-sort" />}
+          {sorted ? (
+            <Icon name={sorted === 'asc' ? 'arrow-up' : 'arrow-down'} className="tg-sort" />
+          ) : (
+            // Hint shown on hover; kept in the layout so the label doesn't shift.
+            <Icon name="arrow-up" className="tg-sort tg-sort-hint" />
+          )}
           {sorted && multiSort && <span className="tg-sort-index">{sortIndex + 1}</span>}
         </button>
       ) : (

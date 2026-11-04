@@ -67,7 +67,7 @@ The arrow function is new on every `GridBody` render, and `GridBody` re-renders 
 **Fix:** `selection={header.column.id === 'select' ? selection : undefined}`. The same applies to `selected` in `BodyCell` (`:798`): only the `select` cell reads it. Passing it only to that cell saves ~14 cell renders per toggle.
 
 ### F-3 Side effects during render and inside a state updater
-**Medium · Perf neutral** · `DataGrid.tsx:269-274`, `:376`
+**Fixed** · was Medium · Perf neutral · `DataGrid.tsx:269-274`, `:376`
 
 - `focusRef.current = …` is written during render. React's rules (and the React Compiler) treat that as unsafe. Under concurrent rendering a discarded render can leave a closure over stale `rows`.
 - `stopEdit` calls `focusRef.current(...)` inside the `setEditing` updater. Updaters must be pure: StrictMode runs them twice, so focus and scroll run twice in development.
@@ -75,7 +75,7 @@ The arrow function is new on every `GridBody` render, and `GridBody` re-renders 
 **Fix:** assign `focusRef.current` in `useLayoutEffect` (or use `useEffectEvent`, which is stable in React 19.2). Keep `editing` in a ref next to the state, so `stopEdit` reads the current cell, calls `setEditing(null)`, then focuses. There is no extra render: same number of `setState` calls.
 
 ### F-4 `GroupRow` comparator ignores `column`
-**Low · Perf neutral** · `DataGrid.tsx:858`
+**Fixed** · was Low · Perf neutral · `DataGrid.tsx:858`
 
 The custom `memo` comparator skips `column` and `item`. `item` changes together with `row`, so that is fine. A changed column definition (e.g. a new header label or options while grouped) leaves group rows stale until they scroll out of view. Add `a.column === b.column`. It is a reference check and stays cheap.
 
@@ -177,7 +177,7 @@ Use `useControllable` for all of them, so they behave the same way. Each one als
 `onError` only fires for failed edits. A failed page fetch is shown inside the grid but never reported. Fire `onError` for both, with a discriminator (`{ type: 'fetch' | 'update', error }`).
 
 ### A-3 Row id encoding leaks
-**Low · Perf neutral** · `DataGrid.tsx:126, 277, 288, 436`
+**Fixed** (`core/rowId.ts`) · was Low · Perf neutral · `DataGrid.tsx:126, 277, 288, 436`
 
 Records use `#<id>` and groups their path. `row.id.slice(1)` is repeated in four places. Use `const recordId = (row) => row.id.slice(1)` and `const isRecordRowId`.
 
@@ -259,7 +259,7 @@ The parts that are pure functions are easy to test and the riskiest to change: `
 - The files mix two styles (`App.tsx`, `FilterPopover.tsx`: double quotes + semicolons; `DataGrid.tsx`, `cells.tsx`: single quotes, none). Add Prettier (or Biome) with one config and reformat in a separate commit, so `git blame` stays usable.
 
 ### T-3 Split `DataGrid.tsx` (860 lines)
-**Low · Perf neutral if done as moves only**
+**Done**: headless `model/` plus compound view parts (`DataGrid.Root` / `.Viewport` / `.StatusBar`), see `client/src/grid/README.md` · was Low · Perf positive (scroll frames no longer run `useTable`, `useData` or the state keys)
 
 Suggested modules: `useGridQuery` (query + mutation + cache patch), `useGridKeyboard` (locate / keys / click), `useColumnReorder` (drag & drop), `HeaderCell.tsx`, `rows.tsx` (`DataRow`, `BodyCell`, `GroupRow`). Moving code between files changes nothing at runtime. Keep the hooks' return values memoised exactly as the inline code is now (e.g. `openFilter`), or memo boundaries break.
 

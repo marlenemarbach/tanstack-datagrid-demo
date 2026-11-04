@@ -1,9 +1,9 @@
-import type { KeyboardEvent, MouseEvent, RefObject } from 'react'
+import { useLayoutEffect, type KeyboardEvent, type MouseEvent, type RefObject } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { EditingCell, GridColumn, GridItem, GridRow, GridTableMeta } from '../core/features'
+import { recordIdOf } from '../core/rowId'
 import { groupCheckState, isRecordSelected, type SelectionState } from '../core/selection'
-
-export type FocusCell = (r: number, ci: number) => void
+import type { FocusCell } from '../model/useGridModel'
 
 interface GridKeyboardOptions {
   rows: Array<GridRow>
@@ -13,7 +13,7 @@ interface GridKeyboardOptions {
   rowVirtualizer: Virtualizer<HTMLDivElement, Element>
   columnVirtualizer: Virtualizer<HTMLDivElement, Element>
   scrollRef: RefObject<HTMLDivElement | null>
-  /** Assigned here on every render; `meta.stopEdit` calls it to restore focus. */
+  /** Assigned here after every render; `meta.stopEdit` calls it to restore focus. */
   focusRef: RefObject<FocusCell>
   meta: GridTableMeta
   selection: SelectionState
@@ -29,19 +29,22 @@ interface GridKeyboardOptions {
 export function useGridKeyboard(o: GridKeyboardOptions) {
   const { rows, navColumns, meta, selection, focusRef } = o
 
-  focusRef.current = (r, ci) => {
-    const row = Math.max(0, Math.min(rows.length - 1, r))
-    const col = Math.max(0, Math.min(navColumns.length - 1, ci))
-    o.rowVirtualizer.scrollToIndex(row)
-    if (col >= o.startCount) o.columnVirtualizer.scrollToIndex(col - o.startCount)
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        const root = o.scrollRef.current
-        const el = root?.querySelector<HTMLElement>(`[data-row="${row}"] [data-ci="${col}"]`) ?? root?.querySelector<HTMLElement>(`[data-row="${row}"]`)
-        el?.focus({ preventScroll: true })
-      }),
-    )
-  }
+  // Assigned on commit, not during render: a discarded render must not leave a stale closure.
+  useLayoutEffect(() => {
+    focusRef.current = (r, ci) => {
+      const row = Math.max(0, Math.min(rows.length - 1, r))
+      const col = Math.max(0, Math.min(navColumns.length - 1, ci))
+      o.rowVirtualizer.scrollToIndex(row)
+      if (col >= o.startCount) o.columnVirtualizer.scrollToIndex(col - o.startCount)
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const root = o.scrollRef.current
+          const el = root?.querySelector<HTMLElement>(`[data-row="${row}"] [data-ci="${col}"]`) ?? root?.querySelector<HTMLElement>(`[data-row="${row}"]`)
+          el?.focus({ preventScroll: true })
+        }),
+      )
+    }
+  })
 
   const locate = (target: EventTarget) => {
     const el = target as HTMLElement
@@ -89,7 +92,7 @@ export function useGridKeyboard(o: GridKeyboardOptions) {
     if (e.key === ' ' && (column?.id === 'select' || !canEdit(row, column))) {
       e.preventDefault()
       const item = row.original as Extract<GridItem, { kind: 'RECORD' }>
-      const id = row.id.slice(1)
+      const id = recordIdOf(row.id)
       meta.select({ groupPath: item.group_path, id }, !isRecordSelected(selection, item.group_path, id))
       return
     }

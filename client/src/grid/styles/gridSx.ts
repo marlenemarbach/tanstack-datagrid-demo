@@ -14,6 +14,9 @@ const tones: Array<Exclude<Tone, "neutral">> = [
  * Cells are plain elements with no `sx` of their own, which keeps rendering
  * thousands of cells cheap (no per-cell Emotion work). Keep this object
  * stable (module scope) so Emotion can reuse the serialised styles.
+ *
+ * Don't use comma-separated selector lists here (`&:hover, &:focus`): in the
+ * Bun dev server Emotion mangles them and the rule is lost. Use `:is()`.
  */
 export const gridSx: SxProps<Theme> = (theme) => {
   const { palette } = theme;
@@ -106,7 +109,7 @@ export const gridSx: SxProps<Theme> = (theme) => {
       bgcolor: paper,
       borderBottom: border,
     },
-    "& .tg-header-row, & .tg-filter-row": { display: "flex" },
+    "& :is(.tg-header-row, .tg-filter-row)": { display: "flex" },
     "& .tg-filter-row": {
       borderTop: border,
       borderBottom: border,
@@ -119,6 +122,7 @@ export const gridSx: SxProps<Theme> = (theme) => {
       px: 1,
       boxSizing: "border-box",
       bgcolor: "var(--filter-bg)",
+      borderInlineEnd: `1px solid ${paper}`,
     },
     "& .tg-fc.tg-pinned": { bgcolor: "var(--filter-bg)", zIndex: 4 },
     "& .tg-filter-input": {
@@ -204,6 +208,21 @@ export const gridSx: SxProps<Theme> = (theme) => {
       alignItems: "center",
       bgcolor: paper,
       fontWeight: 600,
+      borderInlineEnd: `1px solid ${paper}`,
+      // With the label's own padding this keeps the text 10px from the edge.
+      pl: 0.5,
+      // Column separator, like the MUI DataGrid: drawn over the 1px border
+      // (always in the background colour here) and inset top and bottom.
+      "&::after": {
+        content: '""',
+        position: "absolute",
+        top: theme.spacing(1),
+        bottom: theme.spacing(1),
+        insetInlineEnd: -1,
+        width: "1px",
+        bgcolor: palette.divider,
+        pointerEvents: "none",
+      },
       "&:hover .tg-th-filter": { opacity: 0.6 },
       '&[data-dragging="true"]': { opacity: 0.5 },
       '&[data-drop="before"]': {
@@ -215,13 +234,17 @@ export const gridSx: SxProps<Theme> = (theme) => {
     },
     "& .tg-th-label": {
       all: "unset",
+      // Fills the cell, but stops short of both edges; the right gap keeps
+      // clicks on the column resizer (3px into the cell) from sorting.
       flex: 1,
+      alignSelf: "stretch",
       minWidth: 0,
       display: "flex",
       alignItems: "center",
       gap: 0.5,
-      height: "100%",
-      px: 1.25,
+      px: 0.75,
+      mr: 1,
+      borderRadius: 1,
       cursor: "pointer",
       "&:focus-visible": {
         outline: `2px solid ${palette.primary.main}`,
@@ -233,7 +256,11 @@ export const gridSx: SxProps<Theme> = (theme) => {
       textOverflow: "ellipsis",
       whiteSpace: "nowrap",
     },
-    "& .tg-sort": { width: 16, height: 16, color: "primary.main" },
+    "& .tg-sort": { width: 16, height: 16, flex: "none", color: "primary.main" },
+    "& .tg-sort-hint": { color: "text.disabled", opacity: 0 },
+    "& .tg-th-label:is(:hover, :focus-visible) .tg-sort-hint": {
+      opacity: 1,
+    },
     "& .tg-sort-index": {
       fontSize: 10,
       color: "primary.main",
@@ -245,11 +272,12 @@ export const gridSx: SxProps<Theme> = (theme) => {
       placeItems: "center",
       width: 24,
       height: 24,
+      ml: "auto",
       mr: 0.75,
       borderRadius: 1,
       cursor: "pointer",
       opacity: 0,
-      "&:hover, &:focus-visible": { opacity: 1, bgcolor: "action.hover" },
+      "&:is(:hover, :focus-visible)": { opacity: 1, bgcolor: "action.hover" },
       '&[data-active="true"]': { opacity: 1, color: "primary.main" },
     },
     "& .tg-resizer": {
@@ -261,7 +289,17 @@ export const gridSx: SxProps<Theme> = (theme) => {
       zIndex: 1,
       cursor: "col-resize",
       touchAction: "none",
-      '&:hover, &[data-resizing="true"]': { bgcolor: "primary.main" },
+      // The hit area is 6px centred on the column edge; on hover the column
+      // separator is redrawn blue and 2px wide, with the same inset.
+      "&::after": {
+        content: '""',
+        position: "absolute",
+        top: theme.spacing(1),
+        bottom: theme.spacing(1),
+        insetInlineEnd: 2,
+        width: 2,
+      },
+      '&:is(:hover, [data-resizing="true"])::after': { bgcolor: "primary.main" },
     },
 
     // Body
@@ -312,16 +350,20 @@ export const gridSx: SxProps<Theme> = (theme) => {
       "&:focus": { boxShadow: `inset 0 0 0 2px ${palette.primary.main}` },
     },
     // Column borders: always 1px wide, painted in the cell's background colour
-    // when hidden, so toggling never shifts anything.
-    "& :is(.tg-th, .tg-fc)": { borderInlineEnd: `1px solid ${paper}` },
+    // when hidden, so toggling never shifts anything. Header cells show an
+    // inset separator over theirs (see `.tg-th`).
     "& .tg-filter-row .tg-fc": { borderInlineEndColor: "var(--filter-bg)" },
-    '&[data-column-borders="true"] :is(.tg-th, .tg-fc, .tg-cell)': {
+    '&[data-column-borders="true"] :is(.tg-fc, .tg-cell)': {
       borderInlineEndColor: palette.divider,
     },
     "& .tg-pinned": { position: "sticky", zIndex: 1, bgcolor: "var(--row-bg)" },
     "& .tg-th.tg-pinned": { bgcolor: paper, zIndex: 4 },
     "& .tg-pinned-last": {
       boxShadow: `1px 0 0 ${palette.divider}, 4px 0 6px -4px ${alpha(palette.common.black, 0.12)}`,
+    },
+    // The header already has its own border, so drop the shadow's 1px line.
+    "& .tg-th.tg-pinned-last": {
+      boxShadow: `4px 0 6px -4px ${alpha(palette.common.black, 0.12)}`,
     },
 
     // Edit mode: editable cells look like inputs; the real <input> only mounts on edit.

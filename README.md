@@ -34,9 +34,9 @@ Pushes to `main` deploy to GitHub Pages (`.github/workflows/pages.yml`): the app
 | Feature | Where | Notes |
 | --- | --- | --- |
 | Server state | `grid/data/` | The grid asks a `useData` hook for pages and edits. Adapters for TanStack Query (`tanstackDataSource`, `keepPreviousData` avoids flashes) and RTK Query (`rtkDataSource`); sorting, filters, grouping and expanded groups are part of the cache key. |
-| Infinite scroll | `DataGrid.tsx` | Cursor pages of 200; the next page loads when the last 20 rows come into view. |
-| Row virtualization | `DataGrid.tsx` | `@tanstack/react-virtual`, fixed 36px rows, rows are `memo`ised so vertical scrolling only renders new rows. |
-| Column virtualization | `DataGrid.tsx` | Horizontal virtualizer over the unpinned columns; pinned columns are sticky. 66 columns, ~14–20 rendered. |
+| Infinite scroll | `GridViewport.tsx` | Cursor pages of 200; the next page loads when the last 20 rows come into view. |
+| Row virtualization | `GridViewport.tsx` | `@tanstack/react-virtual`, fixed 36px rows, rows are `memo`ised so vertical scrolling only renders new rows. |
+| Column virtualization | `GridViewport.tsx` | Horizontal virtualizer over the unpinned columns; pinned columns are sticky. 66 columns, ~14–20 rendered. |
 | Sorting | header click, shift-click for multi-sort | Sent as Zalando `sort: ["-order_value", "+customer_name"]`. |
 | Filtering | filter icon in each header → MUI `Popover` over the header cell | Text (contains), number/date range, boolean, multi-select for enum/status/icon columns. The TanStack filter value *is* the API filter shape. |
 | Per-column search | filter row under the header | One field per column, synced with the popover. Text: contains. Number/date: `42`, `>10`, `<10`, `10..20`, `2025`, `2025-03`, all bounds inclusive; invalid input is marked and not sent. Enum/status/icon/boolean: native `<select>`. Disable with `filterRow={false}`. |

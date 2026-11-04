@@ -7,6 +7,7 @@ import type { ColumnFiltersState, ColumnOrderState, SortingState } from '@tansta
 import type { Order } from '../api/orders'
 import { orderColumns } from '../columns'
 import { createOrdersApi, type MockOptions } from '../stories/mockOrders'
+import { useGridStatus } from './context'
 import { DataGrid, type DataGridProps } from './DataGrid'
 import { tanstackDataSource } from './data/tanstackDataSource'
 
@@ -45,6 +46,33 @@ function OrdersGrid({ rows, latency, fail, hang, sorting: initialSorting, column
         onColumnOrderChange={setColumnOrder}
         {...props}
       />
+    </Box>
+  )
+}
+
+/** A custom part: reads the counts of the surrounding `DataGrid.Root`, re-renders only when they change. */
+function SelectionSummary() {
+  const { totalRecords, selected } = useGridStatus()
+  return (
+    <Box sx={{ px: 1, py: 0.5, typography: 'body2', color: 'text.secondary' }}>
+      {selected > 0 ? `${selected.toLocaleString()} of ${totalRecords.toLocaleString()} selected` : `${totalRecords.toLocaleString()} orders`}
+    </Box>
+  )
+}
+
+/** The parts composed by hand: a custom summary above the viewport, no status bar. */
+function ComposedOrdersGrid({ rows, latency, fail, hang, filterRow, ...props }: OrdersGridProps) {
+  const useOrders = useMemo(() => {
+    const api = createOrdersApi({ rows, latency, fail, hang })
+    return tanstackDataSource({ queryKey: ['orders', rows, latency, fail, hang], fetchPage: api.fetchPage, updateRecord: api.updateRecord })
+  }, [rows, latency, fail, hang])
+
+  return (
+    <Box sx={{ height: 560, display: 'flex', flexDirection: 'column' }}>
+      <DataGrid.Root columns={orderColumns} useData={useOrders} getRecordId={getOrderId} {...props}>
+        <SelectionSummary />
+        <DataGrid.Viewport filterRow={filterRow} />
+      </DataGrid.Root>
     </Box>
   )
 }
@@ -142,6 +170,19 @@ export const StatusBarActions: Story = {
         Export
       </Button>
     ),
+  },
+}
+
+export const Composed: Story = {
+  render: (args) => <ComposedOrdersGrid {...args} />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`DataGrid.Root` with its parts composed by hand: a custom summary built on `useGridStatus()` above `DataGrid.Viewport`, and no status bar. ' +
+          '`<DataGrid>` is the same with `<DataGrid.Viewport />` and `<DataGrid.StatusBar />`.',
+      },
+    },
   },
 }
 
